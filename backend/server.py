@@ -869,6 +869,44 @@ async def get_premium_plans():
     """Get available premium plans"""
     return {"plans": PREMIUM_PLANS}
 
+@api_router.get("/payment-providers")
+async def get_payment_providers(region: str = None):
+    """Get available payment providers for region"""
+    payment_manager = get_payment_manager("https://captivator.preview.emergentagent.com/")
+    available_providers = payment_manager.get_available_providers(region)
+    
+    provider_info = {
+        PaymentProvider.STRIPE: {
+            "name": "Credit Card (Stripe)",
+            "description": "Pay with Visa, Mastercard, American Express",
+            "supported_regions": ["US", "CA", "GB", "EU", "AU"],
+            "currencies": ["USD", "EUR", "GBP", "CAD", "AUD"]
+        },
+        PaymentProvider.PAYPAL: {
+            "name": "PayPal",
+            "description": "Pay with PayPal account or credit card",
+            "supported_regions": ["Global"],
+            "currencies": ["USD", "EUR", "GBP", "CAD", "AUD", "JPY"]
+        },
+        PaymentProvider.RAZORPAY: {
+            "name": "Razorpay",
+            "description": "Credit/Debit Cards, UPI, Net Banking, Wallets",
+            "supported_regions": ["IN", "MY", "SG"],
+            "currencies": ["INR", "MYR", "SGD"]
+        }
+    }
+    
+    return {
+        "available_providers": [
+            {
+                "provider": provider.value,
+                **provider_info.get(provider, {})
+            }
+            for provider in available_providers
+        ],
+        "recommended": available_providers[0].value if available_providers else "stripe"
+    }
+
 @api_router.post("/premium-status")
 async def check_premium_status(request: Dict[str, str]):
     """Check user premium status"""
