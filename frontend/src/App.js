@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, Video, Download, Play, Eye, Trash2, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Upload, Video, Download, Play, Eye, Trash2, Clock, CheckCircle, AlertCircle, Crown, Mail } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import './App.css';
+
+import PremiumPlans from './components/PremiumPlans';
+import PaymentSuccess from './components/PaymentSuccess';
+import PaymentCancel from './components/PaymentCancel';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
