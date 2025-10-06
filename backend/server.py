@@ -103,6 +103,97 @@ async def check_user_premium_status(user_email: str) -> Dict[str, Any]:
             "max_video_duration": 300  # Default to free plan on error
         }
 
+# Usage limits system
+async def check_user_usage_limits(user_email: str) -> str:
+    """Check user's usage tier based on processing history"""
+    if not user_email:
+        return "standard"
+    
+    try:
+        # Check premium status first
+        premium_status = await check_user_premium_status(user_email)
+        if premium_status["is_premium"]:
+            return "premium"
+        
+        # Count user's video processing in last 30 days
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        
+        user_videos = await db.video_uploads.count_documents({
+            "metadata.user_email": user_email,
+            "created_at": {"$gte": thirty_days_ago}
+        })
+        
+        # Usage tiers for free users
+        if user_videos == 0:
+            return "free_high"  # First-time user gets high quality
+        elif user_videos == 1:
+            return "free_high"  # Second video still high quality
+        else:
+            return "standard"   # After 2 videos, reduced quality until premium
+            
+    except Exception as e:
+        logger.error(f"Error checking usage limits: {str(e)}")
+        return "standard"
+
+async def update_user_usage_count(user_email: str, video_id: str):
+    """Update user's usage count for tracking"""
+    if not user_email:
+        return
+    
+    try:
+        await db.video_uploads.update_one(
+            {"id": video_id},
+            {"$set": {"metadata.user_email": user_email}}
+        )
+    except Exception as e:
+        logger.error(f"Error updating usage count: {str(e)}")
+
+async def get_user_usage_status(user_email: str) -> Dict[str, Any]:
+    """Get detailed user usage status for frontend display"""
+    if not user_email:
+        return {
+            "usage_tier": "standard",
+            "videos_processed": 0,
+            "remaining_high_quality": 0,
+            "is_premium": False
+        }
+    
+    try:
+        premium_status = await check_user_premium_status(user_email)
+        if premium_status["is_premium"]:
+            return {
+                "usage_tier": "premium",
+                "videos_processed": "unlimited",
+                "remaining_high_quality": "unlimited",
+                "is_premium": True,
+                "plan_type": premium_status["plan_type"]
+            }
+        
+        # Count videos processed
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        videos_count = await db.video_uploads.count_documents({
+            "metadata.user_email": user_email,
+            "created_at": {"$gte": thirty_days_ago}
+        })
+        
+        remaining_high_quality = max(0, 2 - videos_count)
+        
+        return {
+            "usage_tier": "free_high" if remaining_high_quality > 0 else "standard",
+            "videos_processed": videos_count,
+            "remaining_high_quality": remaining_high_quality,
+            "is_premium": False
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting usage status: {str(e)}")
+        return {
+            "usage_tier": "standard",
+            "videos_processed": 0,
+            "remaining_high_quality": 0,
+            "is_premium": False
+        }
+
 # Define Models
 class VideoUpload(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
