@@ -499,7 +499,7 @@ async def root():
     return {"message": "Viral Video Analyzer API"}
 
 @api_router.post("/upload-video")
-async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = File(...), user_email: str = None):
     """Upload video for processing"""
     try:
         # Validate file
@@ -520,14 +520,34 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
             duration = float(probe['streams'][0]['duration'])
             file_size = os.path.getsize(temp_path)
             
-            # Check video length (5 minutes max for normal plan)
-            if duration > 300:  # 5 minutes
-                os.remove(temp_path)
-                raise HTTPException(
-                    status_code=400, 
-                    detail="Video too long. Maximum 5 minutes for normal plan. Upgrade to premium for longer videos."
-                )
+            # Check premium status and video length limits
+            if user_email:
+                premium_status = await check_user_premium_status(user_email)
+                max_duration = premium_status["max_video_duration"]
                 
+                if duration > max_duration:
+                    os.remove(temp_path)
+                    if premium_status["is_premium"]:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Video too long. Maximum {max_duration//60} minutes for your premium plan."
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Video too long. Maximum 5 minutes for free plan. Upgrade to premium for longer videos (up to 30 minutes)."
+                        )
+            else:
+                # No user email provided, use free plan limits
+                if duration > 300:  # 5 minutes
+                    os.remove(temp_path)
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Video too long. Maximum 5 minutes for free plan. Upgrade to premium for longer videos (up to 30 minutes)."
+                    )
+                
+        except HTTPException:
+            raise
         except Exception as e:
             os.remove(temp_path)
             raise HTTPException(status_code=400, detail="Invalid video file")
