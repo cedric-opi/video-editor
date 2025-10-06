@@ -171,10 +171,10 @@ class EnhancedVideoService:
                 
                 # Add quality tier info
                 analysis_data["quality_tier"] = usage_tier
-                analysis_data["analysis_model"] = "gpt-5"
+                analysis_data["analysis_model"] = "gpt-4o-enhanced"
                 analysis_data["timestamp"] = datetime.now(timezone.utc).isoformat()
                 
-                logger.info(f"✅ GPT-5 Analysis Complete - Viral Score: {analysis_data.get('viral_score', 'N/A')}")
+                logger.info(f"✅ GPT-4o Enhanced Analysis Complete - Viral Score: {analysis_data.get('viral_score', 'N/A')}")
                 return analysis_data
                 
             except json.JSONDecodeError as e:
