@@ -173,63 +173,155 @@ class CheckoutRequest(BaseModel):
     user_region: Optional[str] = None  # US, IN, GB, etc.
 
 # Helper Functions
-async def analyze_video_content(video_path: str, duration: float) -> Dict[str, Any]:
-    """Analyze video content using OpenAI GPT-4"""
+async def analyze_video_content(video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
+    """Advanced AI video analysis for viral content creation"""
     try:
-        # Get video transcript/description based on visual analysis
+        # Check user's usage limits first
+        usage_tier = await check_user_usage_limits(user_email)
+        
+        # Advanced AI analysis prompt for viral video editing
         analysis_prompt = f"""
-        Analyze this video content for viral potential and techniques. The video is {duration:.1f} seconds long.
+        You are an ABSOLUTE PERFECT VIDEO EDITOR with expertise in creating viral content. Your mission is to edit this {duration:.1f}-second video in the MOST ATTRACTIVE way possible to capture maximum audience attention.
+
+        ANALYZE THIS VIDEO COMPREHENSIVELY:
         
-        Please provide a comprehensive analysis including:
-        1. Viral Techniques: What specific techniques make this content engaging? (hooks, pacing, visual elements, etc.)
-        2. Engagement Factors: What elements drive viewer engagement? (emotional triggers, curiosity gaps, etc.)
-        3. Content Summary: Brief description of the video content and main message
-        4. Highlight Moments: Identify the most engaging segments for creating short clips
+        1. **VIRAL POTENTIAL ANALYSIS:**
+        - Identify the most powerful hooks, emotional peaks, and value moments
+        - Find moments that create curiosity gaps or surprise elements
+        - Detect pacing changes, energy shifts, and climactic moments
+        - Spot visual elements that grab attention (movement, colors, expressions)
         
-        Format your response as JSON with the following structure:
+        2. **STRATEGIC SEGMENTATION:**
+        - Cut the video into 3-5 meaningful chunks (10-30 seconds each)
+        - Each chunk should have a clear purpose: Hook, Build-up, Climax, Resolution
+        - Ensure each segment can work as a standalone viral clip
+        - Prioritize segments with highest engagement potential
+        
+        3. **CAPTION STRATEGY:**
+        - Create compelling captions that enhance the story
+        - Use curiosity-driven text that makes viewers want to watch
+        - Include emotional triggers and call-to-actions
+        - Make captions that work even with sound off
+        
+        4. **ENGAGEMENT OPTIMIZATION:**
+        - Identify moments for text overlays, arrows, or emphasis
+        - Suggest optimal segment lengths for social media platforms
+        - Find natural transition points that maintain viewer attention
+        
+        Quality Level: {"PREMIUM" if usage_tier == "premium" else "HIGH" if usage_tier == "free_high" else "STANDARD"}
+        
+        Respond in JSON format:
         {{
-            "viral_techniques": ["technique1", "technique2", "technique3"],
-            "engagement_factors": ["factor1", "factor2", "factor3"],
-            "content_summary": "Brief summary of the video content",
-            "analysis_text": "Detailed analysis of viral potential and techniques used",
-            "highlight_segments": [
-                {{"start": 0, "end": 15, "reason": "Strong hook opens the video", "score": 0.9}},
-                {{"start": 30, "end": 45, "reason": "Peak emotional moment", "score": 0.8}}
-            ]
+            "viral_score": 0.85,
+            "content_type": "tutorial/entertainment/educational/promotional",
+            "target_audience": "audience description",
+            "viral_techniques": ["specific techniques found"],
+            "engagement_factors": ["emotional triggers", "curiosity elements"],
+            "content_summary": "compelling description",
+            "analysis_text": "detailed viral potential analysis",
+            "optimized_segments": [
+                {{
+                    "segment_id": 1,
+                    "start": 0,
+                    "end": 18,
+                    "duration": 18,
+                    "purpose": "Hook - grab attention instantly",
+                    "viral_score": 0.9,
+                    "caption_text": "🔥 This changes everything...",
+                    "description": "Opening hook with immediate value proposition",
+                    "editing_notes": "Add zoom effect on key moment, emphasize with text",
+                    "best_for_platforms": ["TikTok", "Instagram Reels", "YouTube Shorts"],
+                    "engagement_elements": ["curiosity gap", "visual appeal", "immediate value"]
+                }}
+            ],
+            "editing_recommendations": [
+                "Add dynamic text animations at key moments",
+                "Use quick cuts during high-energy sections",
+                "Include progress indicators for tutorials"
+            ],
+            "caption_strategy": "Use questions and cliffhangers to increase watch time",
+            "optimization_tips": ["Post at peak hours", "Use trending hashtags", "Create series format"]
         }}
         """
         
+        # Use higher quality AI analysis for premium/high-tier users
+        model = "gpt-4" if usage_tier in ["premium", "free_high"] else "gpt-4"
+        max_tokens = 2000 if usage_tier in ["premium", "free_high"] else 1000
+        
         response = await openai_client.chat.completions.create(
-            model="gpt-4",
+            model=model,
             messages=[
-                {"role": "system", "content": "You are an expert in viral video content analysis. Analyze videos for viral potential, engagement techniques, and optimal segmentation for short-form content."},
+                {"role": "system", "content": "You are a world-class viral video editor and content strategist. You understand what makes content go viral and can identify the most engaging moments in any video. Your analysis creates content that consistently achieves millions of views."},
                 {"role": "user", "content": analysis_prompt}
             ],
-            max_tokens=1500,
+            max_tokens=max_tokens,
             temperature=0.7
         )
         
-        # Parse the JSON response
+        # Parse the enhanced JSON response
         try:
             analysis_json = json.loads(response.choices[0].message.content.strip())
+            
+            # Ensure we have optimized_segments (fallback to highlight_segments for compatibility)
+            if "optimized_segments" in analysis_json:
+                analysis_json["highlight_segments"] = analysis_json["optimized_segments"]
+            
+            return analysis_json
         except json.JSONDecodeError:
-            # If JSON parsing fails, create default response
-            logger.warning("Failed to parse AI response as JSON, using default analysis")
+            logger.warning("Failed to parse AI response as JSON, using enhanced default analysis")
             raise ValueError("JSON parsing failed")
         
-        return analysis_json
-        
     except Exception as e:
-        logger.error(f"Error analyzing video: {str(e)}")
-        # Return default analysis if AI fails
-        return {
-            "viral_techniques": ["Strong Opening", "Visual Appeal", "Clear Message"],
-            "engagement_factors": ["Curiosity", "Emotional Connection", "Value Delivery"],
-            "content_summary": "Video content analysis",
-            "analysis_text": "Basic analysis completed. The video shows potential for viral content with proper optimization.",
-            "highlight_segments": [
-                {"start": 0, "end": min(30, duration), "reason": "Opening segment", "score": 0.8}
+        logger.error(f"Error in advanced video analysis: {str(e)}")
+        # Enhanced default analysis based on usage tier
+        default_segments = []
+        
+        if usage_tier in ["premium", "free_high"]:
+            # Create more sophisticated default segments
+            num_segments = min(4, int(duration / 15))
+            segment_duration = duration / num_segments if num_segments > 0 else duration
+            
+            for i in range(num_segments):
+                start_time = i * segment_duration
+                end_time = min((i + 1) * segment_duration, duration)
+                
+                default_segments.append({
+                    "segment_id": i + 1,
+                    "start": start_time,
+                    "end": end_time,
+                    "duration": end_time - start_time,
+                    "purpose": f"Viral Segment {i + 1}",
+                    "viral_score": 0.8 - (i * 0.1),
+                    "caption_text": f"🚀 Amazing moment #{i + 1}",
+                    "description": f"High-impact segment showcasing key content",
+                    "engagement_elements": ["visual appeal", "content value"]
+                })
+        else:
+            # Basic segment for standard tier
+            default_segments = [
+                {
+                    "segment_id": 1,
+                    "start": 0,
+                    "end": min(20, duration),
+                    "duration": min(20, duration),
+                    "purpose": "Main highlight",
+                    "viral_score": 0.6,
+                    "caption_text": "Check this out!",
+                    "description": "Main content highlight"
+                }
             ]
+        
+        return {
+            "viral_score": 0.7,
+            "content_type": "general",
+            "viral_techniques": ["Visual Appeal", "Content Quality"],
+            "engagement_factors": ["Interesting Content", "Good Pacing"],
+            "content_summary": "Video content with viral potential",
+            "analysis_text": "The video shows good potential for viral content with proper editing and optimization.",
+            "optimized_segments": default_segments,
+            "highlight_segments": default_segments,  # Compatibility
+            "editing_recommendations": ["Add engaging captions", "Optimize for mobile viewing"],
+            "quality_tier": usage_tier
         }
 
 async def create_video_segments(video_path: str, analysis_data: Dict[str, Any], video_id: str) -> List[VideoSegment]:
