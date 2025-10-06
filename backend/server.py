@@ -561,27 +561,82 @@ async def generate_audio_for_segment(text: str, segment_id: str) -> str:
         logger.error(f"Error generating audio: {str(e)}")
         return None
 
-async def create_final_clips(video_path: str, segments: List[VideoSegment]) -> List[str]:
-    """Create final video clips with captions and voice-overs using ffmpeg"""
+async def create_final_clips(video_path: str, segments: List[VideoSegment], usage_tier: str = "standard") -> List[str]:
+    """Create enhanced video clips with professional captions and editing"""
     try:
         final_clips = []
         
         for segment in segments:
             output_path = f"/tmp/segment_{segment.id}.mp4"
+            temp_video_path = f"/tmp/temp_video_{segment.id}.mp4"
+            temp_subtitle_path = f"/tmp/subtitle_{segment.id}.srt"
             
             try:
-                logger.info(f"Creating clip for segment {segment.segment_number}: {segment.start_time}s - {segment.end_time}s")
+                logger.info(f"Creating enhanced clip for segment {segment.segment_number}: {segment.start_time}s - {segment.end_time}s")
                 
-                # Extract video segment using ffmpeg
+                # Step 1: Extract video segment with enhanced quality
+                video_filters = []
+                
+                if usage_tier in ["premium", "free_high"]:
+                    # High quality processing
+                    video_filters.extend([
+                        'scale=1080:1920:force_original_aspect_ratio=decrease',  # Vertical format for social media
+                        'pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black',  # Add black bars if needed
+                        'eq=contrast=1.1:brightness=0.05:saturation=1.2'  # Enhance colors slightly
+                    ])
+                else:
+                    # Standard quality processing  
+                    video_filters.extend([
+                        'scale=720:1280:force_original_aspect_ratio=decrease',  # Lower resolution
+                        'pad=720:1280:(ow-iw)/2:(oh-ih)/2:black'
+                    ])
+                
+                # Create subtitle file with enhanced captions
+                subtitle_content = create_enhanced_subtitle(segment, usage_tier)
+                with open(temp_subtitle_path, 'w', encoding='utf-8') as f:
+                    f.write(subtitle_content)
+                
+                # Step 2: Extract base video
                 (
                     ffmpeg
                     .input(video_path, ss=segment.start_time, t=segment.duration)
-                    .output(
-                        output_path, 
-                        vcodec='libx264', 
-                        acodec='aac',
-                        **{'c:v': 'libx264', 'c:a': 'aac', 'preset': 'fast'}
-                    )
+                    .filter('fps', fps=30 if usage_tier in ["premium", "free_high"] else 24)
+                    .output(temp_video_path, vcodec='libx264', acodec='aac', preset='medium')
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+                
+                # Step 3: Add captions with styling based on tier
+                if usage_tier in ["premium", "free_high"]:
+                    # Premium captions with advanced styling
+                    caption_filter = f"subtitles={temp_subtitle_path}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,SecondaryColour=&H000000FF,BackColour=&H80000000,Bold=1,Outline=2,Shadow=3,MarginV=50'"
+                else:
+                    # Basic captions
+                    caption_filter = f"subtitles={temp_subtitle_path}:force_style='FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,Bold=1,Outline=1,MarginV=40'"
+                
+                # Step 4: Create final video with captions and enhancements
+                input_video = ffmpeg.input(temp_video_path)
+                
+                if usage_tier in ["premium", "free_high"]:
+                    # Premium processing with captions and effects
+                    video = input_video.filter('subtitles', temp_subtitle_path, 
+                                             force_style='FontName=Arial,FontSize=28,PrimaryColour=&H00FFFFFF,SecondaryColour=&H000000FF,BackColour=&H80000000,Bold=1,Outline=2,Shadow=3,MarginV=60')
+                    
+                    # Add fade in/out for premium
+                    video = video.filter('fade', type='in', duration=0.5).filter('fade', type='out', start_time=segment.duration-0.5, duration=0.5)
+                else:
+                    # Standard processing with basic captions
+                    video = input_video.filter('subtitles', temp_subtitle_path,
+                                             force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,Bold=1,Outline=1,MarginV=50')
+                
+                # Output final video
+                (
+                    video
+                    .output(output_path, 
+                           vcodec='libx264', 
+                           acodec='aac',
+                           crf=18 if usage_tier in ["premium", "free_high"] else 23,  # Higher quality for premium
+                           preset='medium' if usage_tier in ["premium", "free_high"] else 'fast')
                     .overwrite_output()
                     .run(quiet=True)
                 )
@@ -589,23 +644,76 @@ async def create_final_clips(video_path: str, segments: List[VideoSegment]) -> L
                 # Verify the file was created
                 if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                     final_clips.append(output_path)
-                    logger.info(f"Successfully created segment file: {output_path}")
+                    logger.info(f"Successfully created enhanced segment: {output_path} ({usage_tier} quality)")
                 else:
-                    logger.error(f"Segment file not created or empty: {output_path}")
+                    logger.error(f"Enhanced segment file not created: {output_path}")
+                
+                # Cleanup temporary files
+                for temp_file in [temp_video_path, temp_subtitle_path]:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
                 
             except ffmpeg.Error as e:
-                logger.error(f"FFmpeg error processing segment {segment.id}: {str(e)}")
+                logger.error(f"FFmpeg error creating enhanced segment {segment.id}: {str(e)}")
                 continue
             except Exception as e:
-                logger.error(f"Unexpected error processing segment {segment.id}: {str(e)}")
+                logger.error(f"Error creating enhanced segment {segment.id}: {str(e)}")
                 continue
         
-        logger.info(f"Created {len(final_clips)} final clips out of {len(segments)} segments")
+        logger.info(f"Created {len(final_clips)} enhanced clips out of {len(segments)} segments using {usage_tier} tier")
         return final_clips
         
     except Exception as e:
-        logger.error(f"Error creating final clips: {str(e)}")
+        logger.error(f"Error creating enhanced final clips: {str(e)}")
         return []
+
+def create_enhanced_subtitle(segment: VideoSegment, usage_tier: str) -> str:
+    """Create subtitle file with enhanced captions"""
+    
+    # Split caption into multiple lines if it's long
+    caption_text = segment.caption_text
+    words = caption_text.split()
+    
+    if usage_tier in ["premium", "free_high"]:
+        # Premium: Multi-line captions with timing
+        lines = []
+        current_line = []
+        
+        for word in words:
+            current_line.append(word)
+            if len(' '.join(current_line)) > 25:  # Line length limit
+                lines.append(' '.join(current_line))
+                current_line = []
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        # Create multiple subtitle entries for dynamic display
+        subtitle_content = "1\n"
+        subtitle_content += "00:00:00,000 --> 00:00:03,000\n"
+        subtitle_content += lines[0] + "\n\n"
+        
+        if len(lines) > 1:
+            subtitle_content += "2\n"
+            subtitle_content += f"00:00:03,000 --> {format_time(segment.duration)}\n"
+            subtitle_content += lines[1] + "\n\n"
+    else:
+        # Standard: Simple single caption
+        subtitle_content = "1\n"
+        subtitle_content += f"00:00:00,000 --> {format_time(segment.duration)}\n"
+        subtitle_content += caption_text[:50] + "..." if len(caption_text) > 50 else caption_text
+        subtitle_content += "\n\n"
+    
+    return subtitle_content
+
+def format_time(seconds: float) -> str:
+    """Format seconds to SRT timestamp format"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millisecs = int((seconds % 1) * 1000)
+    
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millisecs:03d}"
 
 # Background task for video processing
 async def process_video_pipeline(video_id: str, video_path: str, duration: float):
