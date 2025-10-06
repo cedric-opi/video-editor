@@ -7,9 +7,11 @@ const API = `${BACKEND_URL}/api`;
 
 const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
   const [plans, setPlans] = useState({});
+  const [paymentProviders, setPaymentProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('premium_monthly');
+  const [selectedProvider, setSelectedProvider] = useState('');
 
   useEffect(() => {
     loadPremiumPlans();
