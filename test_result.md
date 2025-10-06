@@ -150,6 +150,18 @@ backend:
         - agent: "testing"
         - comment: "✅ PASSED - EMERGENT_LLM_KEY configuration working correctly. Key is properly loaded from environment variables, GPT-5 Enhanced Video Service initializes successfully on startup (confirmed in logs), and emergentintegrations library is properly installed and functional. GPT-5 API calls are being made successfully through the configured key."
 
+  - task: "Direct Video Analysis Endpoint (/api/video/analyze)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED - Added missing /api/video/analyze endpoint as requested in review. Endpoint provides direct GPT-5 enhanced video analysis with immediate response including: viral score, content analysis, intelligent segmentation, enhanced fields (hook_strategy, platform_optimization, viral_prediction), and comprehensive segment data. Endpoint accepts video upload and returns complete analysis without background processing. Successfully handles GPT-5 integration and fallback mechanisms."
+
 frontend:
   - task: "No Frontend Changes Required"
     implemented: true
