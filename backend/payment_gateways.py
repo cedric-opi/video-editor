@@ -285,6 +285,124 @@ class MomoPayAdapter(PaymentAdapter):
         ).hexdigest()
         return signature
     
+    async def get_live_exchange_rate(self) -> float:
+        """Get live USD to VND exchange rate with fallback"""
+        try:
+            # Try to get live rates from exchange API
+            response = requests.get(
+                "https://api.exchangerate-api.com/v4/latest/USD",
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                vnd_rate = data.get("rates", {}).get("VND")
+                if vnd_rate:
+                    logger.info(f"💱 Live exchange rate: 1 USD = {vnd_rate} VND")
+                    return float(vnd_rate)
+        except Exception as e:
+            logger.warning(f"Failed to fetch live exchange rate: {str(e)}")
+        
+        # Fallback to configured rate
+        fallback_rate = 24000
+        logger.info(f"💱 Using fallback exchange rate: 1 USD = {fallback_rate} VND")
+        return fallback_rate
+    
+    def validate_webhook_ip(self, client_ip: str) -> bool:
+        """Validate that webhook request comes from authorized MomoPay IPs"""
+        return client_ip in self.allowed_incoming_ips
+    
+    async def create_atm_payment(self, request: PaymentRequest, bank_code: str = None) -> PaymentResponse:
+        """Create ATM card payment specifically"""
+        try:
+            # Get live exchange rate
+            exchange_rate = await self.get_live_exchange_rate()
+            amount_vnd = int(request.amount * exchange_rate)
+            
+            request_id = str(uuid.uuid4())
+            order_id = f"ATM_{request.plan_type}_{int(time.time())}"
+            
+            # Enhanced ATM payment data
+            request_data = {
+                "partnerCode": self.partner_code,
+                "partnerName": "Viral Video Analyzer",
+                "storeId": "ViralVideoStore",
+                "requestId": request_id,
+                "amount": amount_vnd,
+                "orderId": order_id,
+                "orderInfo": f"Premium Plan ATM Payment: {request.plan_type}",
+                "redirectUrl": request.success_url.replace("{CHECKOUT_SESSION_ID}", request_id).replace("{PROVIDER}", "momopay_atm"),
+                "ipnUrl": self.webhook_url,
+                "lang": "vi",  # Vietnamese for ATM users
+                "extraData": json.dumps({
+                    "user_email": request.user_email,
+                    "plan_type": request.plan_type,
+                    "payment_method": "atm",
+                    "exchange_rate": exchange_rate,
+                    "original_amount_usd": request.amount,
+                    **request.metadata
+                }),
+                "requestType": "payWithATM",
+                "autoCapture": True,  # Auto-capture for ATM payments
+            }
+            
+            # Add bank code if specified
+            if bank_code:
+                request_data["bankCode"] = bank_code
+            
+            # Generate signature
+            signature_data = {
+                "accessKey": self.access_key,
+                "amount": str(amount_vnd),
+                "extraData": request_data["extraData"],
+                "ipnUrl": self.webhook_url,
+                "orderId": order_id,
+                "orderInfo": request_data["orderInfo"],
+                "partnerCode": self.partner_code,
+                "redirectUrl": request_data["redirectUrl"],
+                "requestId": request_id,
+                "requestType": "payWithATM"
+            }
+            
+            if bank_code:
+                signature_data["bankCode"] = bank_code
+            
+            request_data["signature"] = self.generate_signature(signature_data)
+            
+            # Use ATM-specific endpoint
+            response = requests.post(
+                self.atm_endpoint,
+                json=request_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get("resultCode") == 0:
+                logger.info(f"✅ ATM payment created: {order_id} - {amount_vnd} VND (${request.amount} USD)")
+                return PaymentResponse(
+                    provider=PaymentProvider.MOMOPAY,
+                    checkout_url=result.get("payUrl"),
+                    session_id=request_id,
+                    order_id=order_id,
+                    status=PaymentStatus.PENDING,
+                    raw_response=result
+                )
+            else:
+                return PaymentResponse(
+                    provider=PaymentProvider.MOMOPAY,
+                    status=PaymentStatus.FAILED,
+                    error=f"ATM payment failed: {result.get('message', 'Unknown error')}"
+                )
+                
+        except Exception as e:
+            logger.error(f"ATM payment creation failed: {str(e)}")
+            return PaymentResponse(
+                provider=PaymentProvider.MOMOPAY,
+                status=PaymentStatus.FAILED,
+                error=str(e)
+            )
+    
     async def create_checkout_session(self, request: PaymentRequest) -> PaymentResponse:
         try:
             # Convert USD to VND (Vietnamese Dong) - approximate rate 1 USD = 24,000 VND
