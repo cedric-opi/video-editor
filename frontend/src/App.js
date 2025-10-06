@@ -258,6 +258,40 @@ const ViralVideoAnalyzer = () => {
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">
             AI-powered analysis system that breaks viral videos into shareable highlights with captions and voice-overs
           </p>
+          
+          {/* Premium Status and Email Input */}
+          <div className="max-w-md mx-auto mt-8 space-y-4">
+            <div className="flex items-center gap-3">
+              <Mail className="w-5 h-5 text-gray-400" />
+              <input
+                type="email"
+                placeholder="Enter your email (optional)"
+                value={userEmail}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                className="flex-1 bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                data-testid="user-email-input"
+              />
+            </div>
+            
+            {premiumStatus.is_premium ? (
+              <div className="flex items-center justify-center gap-2 text-yellow-400">
+                <Crown className="w-5 h-5" />
+                <span className="font-medium">Premium Active • {premiumStatus.max_video_duration/60} min videos</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-3">
+                <span className="text-gray-400">Free Plan • 5 min videos</span>
+                <button
+                  onClick={() => setShowPremiumModal(true)}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-1 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-1"
+                  data-testid="upgrade-premium-btn"
+                >
+                  <Crown className="w-4 h-4" />
+                  Upgrade to Premium
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Upload Section */}
