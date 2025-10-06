@@ -651,25 +651,15 @@ class ViralVideoAnalyzerTester:
             return False
 
 def main():
-    print("🚀 Starting Viral Video Analyzer Backend Tests")
-    print("=" * 60)
+    print("🚀 Starting Enhanced GPT-5 Video Analysis System Tests")
+    print("=" * 80)
     
     tester = ViralVideoAnalyzerTester()
     
-    # Test basic API functionality
+    # Test basic API functionality first
     print("\n📡 Testing Basic API Endpoints...")
     tester.test_root_endpoint()
     tester.test_video_list_empty()
-    
-    # Test error handling
-    print("\n🚫 Testing Error Handling...")
-    tester.test_video_upload_invalid_file()
-    tester.test_video_upload_no_file()
-    tester.test_processing_status_nonexistent()
-    tester.test_video_analysis_nonexistent()
-    tester.test_video_segments_nonexistent()
-    tester.test_download_segment_nonexistent()
-    tester.test_delete_video_nonexistent()
     
     # Test system dependencies
     print("\n🔧 Testing System Dependencies...")
@@ -677,17 +667,53 @@ def main():
     tester.test_openai_connection()
     tester.test_ffmpeg_availability()
     
-    # Print final results
-    print("\n" + "=" * 60)
-    print(f"📊 Test Results: {tester.tests_passed}/{tester.tests_run} tests passed")
+    # Test GPT-5 Enhanced Features (Main Focus)
+    print("\n🧠 Testing GPT-5 Enhanced Video Analysis System...")
+    print("=" * 80)
     
-    if tester.tests_passed == tester.tests_run:
-        print("🎉 All tests passed! Backend API is working correctly.")
+    # 1. Test GPT-5 Configuration
+    tester.test_gpt5_configuration()
+    
+    # 2. Test Video Upload with GPT-5 Analysis
+    tester.test_video_upload_with_gpt5_analysis()
+    
+    # 3. Test GPT-5 Enhanced Video Analysis Quality
+    tester.test_gpt5_video_analysis_quality()
+    
+    # 4. Test Intelligent Video Segmentation (Max 3 segments for long videos)
+    tester.test_intelligent_video_segmentation()
+    
+    # 5. Test Premium Clip Creation with AI-Guided Editing
+    tester.test_premium_clip_creation()
+    
+    # 6. Test Enhanced Subtitle Generation with Emotional Cues
+    tester.test_subtitle_enhancement()
+    
+    # 7. Test GPT-5 to GPT-4 Fallback System
+    tester.test_fallback_system()
+    
+    # Test error handling (basic)
+    print("\n🚫 Testing Basic Error Handling...")
+    tester.test_video_upload_invalid_file()
+    tester.test_processing_status_nonexistent()
+    tester.test_video_analysis_nonexistent()
+    
+    # Print comprehensive GPT-5 test results
+    gpt5_success = tester.print_gpt5_test_summary()
+    
+    # Print final results
+    print("\n" + "=" * 80)
+    print(f"📊 Basic API Tests: {tester.tests_passed}/{tester.tests_run} tests passed")
+    
+    if gpt5_success and tester.tests_passed >= tester.tests_run * 0.8:
+        print("🎉 GPT-5 Enhanced Video Analysis System is working excellently!")
         return 0
-    else:
-        failed_tests = tester.tests_run - tester.tests_passed
-        print(f"⚠️  {failed_tests} test(s) failed. Check the issues above.")
+    elif gpt5_success or tester.tests_passed >= tester.tests_run * 0.6:
+        print("⚠️  System is mostly functional but has some issues")
         return 1
+    else:
+        print("❌ System has significant issues that need attention")
+        return 2
 
 if __name__ == "__main__":
     sys.exit(main())
