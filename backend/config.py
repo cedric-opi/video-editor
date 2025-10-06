@@ -26,9 +26,20 @@ MOMO_SECRET_KEY = os.environ.get('MOMO_SECRET_KEY', 'MOMO_SANDBOX_SECRET')
 MOMO_ENDPOINT = "https://test-payment.momo.vn/v2/gateway/api/create"
 MOMO_QUERY_ENDPOINT = "https://test-payment.momo.vn/v2/gateway/api/query"
 
-# MomoPay IP Whitelist for Production
+# MomoPay IP Whitelist for Production Security
 MOMO_INCOMING_IP = "210.245.113.71"
 MOMO_OUTGOING_IPS = ["118.69.210.244", "118.68.171.198"]
+
+# MomoPay ATM Card Support
+MOMO_ATM_ENDPOINT = "https://test-payment.momo.vn/v2/gateway/api/atm/create"
+MOMO_ATM_BANKS = [
+    "VIETCOMBANK", "BIDV", "VIETINBANK", "TECHCOMBANK", "ACB", 
+    "MB", "SACOMBANK", "AGRIBANK", "VPBANK", "TPB", "SHB"
+]
+
+# Currency Conversion API
+EXCHANGE_RATE_API_URL = "https://api.exchangerate-api.com/v4/latest/USD"
+FALLBACK_USD_TO_VND_RATE = 24000  # Fallback rate if API fails
 
 # Application Configuration
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
