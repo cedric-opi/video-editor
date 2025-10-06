@@ -841,6 +841,203 @@ async def delete_video(video_id: str):
         logger.error(f"Delete error: {str(e)}")
         raise HTTPException(status_code=500, detail="Delete failed")
 
+# Premium Plan and Payment Endpoints
+
+@api_router.get("/premium-plans")
+async def get_premium_plans():
+    """Get available premium plans"""
+    return {"plans": PREMIUM_PLANS}
+
+@api_router.post("/premium-status")
+async def check_premium_status(request: Dict[str, str]):
+    """Check user premium status"""
+    user_email = request.get("user_email")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email is required")
+    
+    status = await check_user_premium_status(user_email)
+    return status
+
+@api_router.post("/create-checkout")
+async def create_checkout_session(request: CheckoutRequest):
+    """Create Stripe checkout session for premium plan"""
+    try:
+        # Validate plan type
+        if request.plan_type not in PREMIUM_PLANS:
+            raise HTTPException(status_code=400, detail="Invalid plan type")
+        
+        # Get plan details
+        plan = PREMIUM_PLANS[request.plan_type]
+        amount = plan["price"]
+        
+        # Initialize Stripe client
+        stripe_client = get_stripe_client(request.origin_url)
+        
+        # Create success and cancel URLs
+        success_url = f"{request.origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{request.origin_url}/payment-cancel"
+        
+        # Create checkout session
+        checkout_request = CheckoutSessionRequest(
+            amount=amount,
+            currency="usd",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "user_email": request.user_email,
+                "plan_type": request.plan_type,
+                "source": "viral_video_analyzer"
+            }
+        )
+        
+        session: CheckoutSessionResponse = await stripe_client.create_checkout_session(checkout_request)
+        
+        # Save payment transaction
+        transaction = PaymentTransaction(
+            user_email=request.user_email,
+            amount=amount,
+            currency="usd",
+            plan_type=request.plan_type,
+            stripe_session_id=session.session_id,
+            payment_status="pending",
+            status="initiated",
+            metadata={
+                "plan_name": plan["name"],
+                "plan_description": plan["description"]
+            }
+        )
+        
+        await db.payment_transactions.insert_one(transaction.dict())
+        
+        logger.info(f"Created checkout session for user {request.user_email}, plan {request.plan_type}")
+        
+        return {
+            "checkout_url": session.url,
+            "session_id": session.session_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating checkout session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
+
+@api_router.get("/payment-status/{session_id}")
+async def get_payment_status(session_id: str):
+    """Get payment status for checkout session"""
+    try:
+        # Find transaction
+        transaction = await db.payment_transactions.find_one({"stripe_session_id": session_id})
+        if not transaction:
+            raise HTTPException(status_code=404, detail="Payment session not found")
+        
+        # If already processed, return cached status
+        if transaction["payment_status"] in ["paid", "failed", "expired"]:
+            return {
+                "payment_status": transaction["payment_status"],
+                "status": transaction["status"],
+                "plan_type": transaction["plan_type"],
+                "amount": transaction["amount"]
+            }
+        
+        # Get Stripe client (need origin URL - use a default for status checks)
+        stripe_client = get_stripe_client("https://captivator.preview.emergentagent.com/")
+        
+        # Check status with Stripe
+        checkout_status: CheckoutStatusResponse = await stripe_client.get_checkout_status(session_id)
+        
+        # Update transaction status
+        await db.payment_transactions.update_one(
+            {"stripe_session_id": session_id},
+            {"$set": {
+                "payment_status": checkout_status.payment_status,
+                "status": checkout_status.status
+            }}
+        )
+        
+        # If payment is successful and not already processed, activate premium plan
+        if checkout_status.payment_status == "paid" and transaction["payment_status"] != "paid":
+            await activate_premium_plan(transaction["user_email"], transaction["plan_type"])
+        
+        return {
+            "payment_status": checkout_status.payment_status,
+            "status": checkout_status.status,
+            "plan_type": transaction["plan_type"],
+            "amount": checkout_status.amount_total / 100  # Convert from cents
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking payment status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to check payment status: {str(e)}")
+
+async def activate_premium_plan(user_email: str, plan_type: str):
+    """Activate premium plan for user"""
+    try:
+        plan = PREMIUM_PLANS[plan_type]
+        
+        # Calculate expiration date
+        expires_at = datetime.now(timezone.utc) + timedelta(days=plan["duration_days"])
+        
+        # Deactivate any existing premium plans
+        await db.premium_plans.update_many(
+            {"user_email": user_email, "status": "active"},
+            {"$set": {"status": "inactive"}}
+        )
+        
+        # Create new premium plan
+        premium_plan = PremiumPlan(
+            user_email=user_email,
+            plan_type=plan_type,
+            amount=plan["price"],
+            currency="usd",
+            status="active",
+            expires_at=expires_at
+        )
+        
+        await db.premium_plans.insert_one(premium_plan.dict())
+        
+        logger.info(f"Activated premium plan {plan_type} for user {user_email}")
+        
+    except Exception as e:
+        logger.error(f"Error activating premium plan: {str(e)}")
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: HTTPException):
+    """Handle Stripe webhooks"""
+    try:
+        # Get raw body and signature
+        body = await request.body()
+        signature = request.headers.get("Stripe-Signature")
+        
+        # Get Stripe client
+        stripe_client = get_stripe_client("https://captivator.preview.emergentagent.com/")
+        
+        # Handle webhook
+        webhook_response = await stripe_client.handle_webhook(body, signature)
+        
+        if webhook_response.event_type == "checkout.session.completed":
+            # Find and update transaction
+            transaction = await db.payment_transactions.find_one({
+                "stripe_session_id": webhook_response.session_id
+            })
+            
+            if transaction and transaction["payment_status"] != "paid":
+                # Update transaction
+                await db.payment_transactions.update_one(
+                    {"stripe_session_id": webhook_response.session_id},
+                    {"$set": {
+                        "payment_status": "paid",
+                        "status": "completed"
+                    }}
+                )
+                
+                # Activate premium plan
+                await activate_premium_plan(transaction["user_email"], transaction["plan_type"])
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        logger.error(f"Error handling webhook: {str(e)}")
+        raise HTTPException(status_code=400, detail="Webhook handling failed")
+
 # Include the router in the main app
 app.include_router(api_router)
 
