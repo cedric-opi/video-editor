@@ -23,8 +23,8 @@ from PIL import Image, ImageDraw, ImageFont
 # OpenAI imports
 from openai import AsyncOpenAI
 
-# Stripe imports
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+# Payment gateway imports
+from payment_gateways import PaymentGatewayManager, PaymentRequest, PaymentProvider, PaymentStatus
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
