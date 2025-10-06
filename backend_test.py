@@ -859,7 +859,7 @@ class ViralVideoAnalyzerTester:
             # Test creating a MomoPay payment
             checkout_data = {
                 "user_email": "momopay_test@example.com",
-                "plan_type": "monthly",
+                "plan_type": "premium_monthly",
                 "payment_provider": "momopay",
                 "currency": "USD",
                 "user_region": "VN",
