@@ -177,74 +177,14 @@ async def get_user_usage_status(user_email: str) -> Dict[str, Any]:
             "is_premium": False
         }
 
-# Define Models
-class VideoUpload(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    filename: str
-    original_filename: str
-    file_size: int
-    duration: float
-    status: str = "uploaded"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# Application startup and shutdown events
+@app.on_event("startup")
+async def startup_db_client():
+    await connect_to_mongo()
 
-class ViralAnalysis(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    video_id: str
-    analysis_text: str
-    viral_techniques: List[str]
-    engagement_factors: List[str]
-    content_summary: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class VideoSegment(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    video_id: str
-    segment_number: int
-    start_time: float
-    end_time: float
-    duration: float
-    caption_text: str
-    audio_script: str
-    highlight_score: float
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ProcessingStatus(BaseModel):
-    video_id: str
-    status: str
-    progress: int
-    message: str
-    error: Optional[str] = None
-
-# Payment Models
-class PremiumPlan(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_email: str
-    plan_type: str  # "premium_monthly", "premium_yearly"
-    amount: float
-    currency: str = "usd"
-    status: str = "pending"
-    stripe_session_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    expires_at: Optional[datetime] = None
-
-class PaymentTransaction(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_email: str
-    amount: float
-    currency: str = "usd"
-    plan_type: str
-    stripe_session_id: str
-    payment_status: str = "pending"
-    status: str = "initiated"
-    metadata: Dict[str, Any] = {}
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class CheckoutRequest(BaseModel):
-    plan_type: str
-    user_email: str
-    origin_url: str
-    payment_provider: Optional[str] = None  # stripe, paypal, razorpay
-    user_region: Optional[str] = None  # US, IN, GB, etc.
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    await close_mongo_connection()
 
 # Helper Functions
 async def analyze_video_content(video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
