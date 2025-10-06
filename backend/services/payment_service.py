@@ -212,9 +212,67 @@ class MomoPayService:
                 "error": f"Payment creation failed: {str(e)}"
             }
     
+    async def _create_demo_payment(self, user_email: str, plan_type: str, amount: float, 
+                                 currency: str, success_url: str) -> Dict[str, Any]:
+        """Create demo payment for testing purposes"""
+        try:
+            # Generate demo IDs
+            request_id = f"demo_{str(uuid.uuid4())[:8]}"
+            order_id = f"DEMO_VVA_{plan_type.upper()}_{int(time.time())}"
+            
+            # Convert to VND if needed
+            if currency.upper() == "USD":
+                amount_vnd = int(self.convert_currency(amount, "USD", "VND"))
+            else:
+                amount_vnd = int(amount)
+            
+            # Save demo transaction
+            db = await get_database()
+            transaction = PaymentTransaction(
+                user_email=user_email,
+                amount=amount,
+                currency=currency,
+                plan_type=plan_type,
+                payment_provider="momopay",
+                session_id=request_id,
+                payment_status="pending",
+                status="initiated",
+                metadata={
+                    "order_id": order_id,
+                    "amount_vnd": amount_vnd,
+                    "demo_mode": True,
+                    "demo_payment_url": f"https://demo-payment.momo.vn/pay?order={order_id}"
+                }
+            )
+            await db.payment_transactions.insert_one(transaction.dict())
+            
+            # Create demo success URL
+            demo_success_url = success_url.replace("{CHECKOUT_SESSION_ID}", request_id).replace("{PROVIDER}", "momopay")
+            
+            logger.info(f"🧪 DEMO: Created MomoPay payment simulation for {order_id}")
+            
+            return {
+                "success": True,
+                "checkout_url": f"https://demo.captivator.preview.emergentagent.com/demo-payment?order_id={order_id}&amount={amount_vnd}&currency={currency}&success_url={demo_success_url}",
+                "session_id": request_id,
+                "order_id": order_id,
+                "amount_vnd": amount_vnd,
+                "amount_usd": amount,
+                "qr_code_url": f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=DEMO_MOMO_PAY_{order_id}",
+                "demo_mode": True,
+                "provider": "momopay"
+            }
+            
+        except Exception as e:
+            logger.error(f"Demo payment creation error: {e}")
+            return {"success": False, "error": f"Demo payment failed: {str(e)}"}
+
     async def check_payment_status(self, order_id: str) -> Dict[str, Any]:
         """Check payment status with MomoPay"""
         try:
+            # 🧪 DEMO MODE: Simulate payment status check
+            if self.demo_mode or order_id.startswith("DEMO_"):
+                return await self._check_demo_payment_status(order_id)
             request_id = str(uuid.uuid4())
             
             # Prepare status query request
