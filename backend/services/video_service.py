@@ -1,5 +1,5 @@
 """
-Advanced AI Video Processing Service with Professional Subtitles
+Advanced AI Video Processing Service with GPT-5 Integration
 """
 import os
 import json
@@ -19,6 +19,7 @@ from config import (
 from database import get_database
 from models import VideoSegment, ViralAnalysis
 from services.user_service import UserService
+from services.enhanced_video_service import EnhancedVideoService
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,15 @@ class VideoService:
     
     def __init__(self):
         self.openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        # Initialize enhanced GPT-5 service
+        try:
+            self.enhanced_service = EnhancedVideoService()
+            self.use_gpt5 = True
+            logger.info("✅ GPT-5 Enhanced Video Service initialized successfully")
+        except Exception as e:
+            logger.warning(f"GPT-5 service initialization failed, falling back to GPT-4: {str(e)}")
+            self.enhanced_service = None
+            self.use_gpt5 = False
     
     async def analyze_video_content(self, video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
         """Advanced AI video analysis for viral content creation"""
