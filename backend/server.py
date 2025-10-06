@@ -1115,44 +1115,59 @@ async def activate_premium_plan(user_email: str, plan_type: str):
     except Exception as e:
         logger.error(f"Error activating premium plan: {str(e)}")
 
-@api_router.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    """Handle Stripe webhooks"""
+@api_router.post("/webhook/{provider}")
+async def handle_webhook(provider: str, request: Request):
+    """Handle webhooks from any payment provider"""
     try:
-        # Get raw body and signature  
+        # Get request body and headers
         body = await request.body()
-        signature = request.headers.get("Stripe-Signature")
+        headers = dict(request.headers)
         
-        # Get Stripe client
-        stripe_client = get_stripe_client("https://captivator.preview.emergentagent.com/")
+        # Initialize payment manager
+        payment_manager = get_payment_manager("https://captivator.preview.emergentagent.com/")
         
-        # Handle webhook
-        webhook_response = await stripe_client.handle_webhook(body, signature)
+        try:
+            provider_enum = PaymentProvider(provider)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid payment provider")
         
-        if webhook_response.event_type == "checkout.session.completed":
-            # Find and update transaction
-            transaction = await db.payment_transactions.find_one({
-                "stripe_session_id": webhook_response.session_id
-            })
+        # Handle webhook with appropriate provider
+        webhook_data = await payment_manager.handle_webhook(provider_enum, body, headers)
+        
+        # Process webhook based on event type
+        if webhook_data.get("event_type") in ["checkout.session.completed", "CHECKOUT-ORDER-APPROVED", "payment.captured"]:
+            session_id = webhook_data.get("session_id") or webhook_data.get("order_id") or webhook_data.get("payment_id")
             
-            if transaction and transaction["payment_status"] != "paid":
-                # Update transaction
-                await db.payment_transactions.update_one(
-                    {"stripe_session_id": webhook_response.session_id},
-                    {"$set": {
-                        "payment_status": "paid",
-                        "status": "completed"
-                    }}
-                )
+            if session_id:
+                # Find and update transaction
+                transaction = await db.payment_transactions.find_one({
+                    "stripe_session_id": session_id
+                })
                 
-                # Activate premium plan
-                await activate_premium_plan(transaction["user_email"], transaction["plan_type"])
+                if transaction and transaction["payment_status"] not in ["paid", "completed"]:
+                    # Update transaction
+                    await db.payment_transactions.update_one(
+                        {"stripe_session_id": session_id},
+                        {"$set": {
+                            "payment_status": "paid",
+                            "status": "completed"
+                        }}
+                    )
+                    
+                    # Activate premium plan
+                    await activate_premium_plan(transaction["user_email"], transaction["plan_type"])
         
-        return {"status": "success"}
+        return {"status": "success", "provider": provider}
         
     except Exception as e:
-        logger.error(f"Error handling webhook: {str(e)}")
-        raise HTTPException(status_code=400, detail="Webhook handling failed")
+        logger.error(f"Error handling {provider} webhook: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Webhook handling failed: {str(e)}")
+
+# Legacy endpoint for backward compatibility
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Legacy Stripe webhook handler"""
+    return await handle_webhook("stripe", request)
 
 # Include the router in the main app
 app.include_router(api_router)
