@@ -341,7 +341,7 @@ class MomoPayAdapter(PaymentAdapter):
                     "original_amount_usd": request.amount,
                     **request.metadata
                 }),
-                "requestType": "payWithATM",
+                "requestType": "payWithMoMoATM",
                 "autoCapture": True,  # Auto-capture for ATM payments
             }
             
@@ -360,7 +360,7 @@ class MomoPayAdapter(PaymentAdapter):
                 "partnerCode": self.partner_code,
                 "redirectUrl": request_data["redirectUrl"],
                 "requestId": request_id,
-                "requestType": "payWithATM"
+                "requestType": "payWithMoMoATM"
             }
             
             if bank_code:
@@ -445,7 +445,7 @@ class MomoPayAdapter(PaymentAdapter):
                 "partnerCode": self.partner_code,
                 "redirectUrl": request_data["redirectUrl"],
                 "requestId": request_id,
-                "requestType": "payWithATM"
+                "requestType": "payWithMoMoATM"
             }
             
             request_data["signature"] = self.generate_signature(signature_data)
