@@ -1284,6 +1284,16 @@ async def check_premium_status(request: Dict[str, str]):
     status = await check_user_premium_status(user_email)
     return status
 
+@api_router.post("/usage-status")
+async def get_usage_status(request: Dict[str, str]):
+    """Get detailed user usage status including quality limits"""
+    user_email = request.get("user_email")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email is required")
+    
+    status = await get_user_usage_status(user_email)
+    return status
+
 @api_router.post("/create-checkout")
 async def create_checkout_session(request: CheckoutRequest):
     """Create checkout session for premium plan using multi-gateway system"""
