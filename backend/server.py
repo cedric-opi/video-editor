@@ -1013,49 +1013,73 @@ async def create_checkout_session(request: CheckoutRequest):
         raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
 
 @api_router.get("/payment-status/{session_id}")
-async def get_payment_status(session_id: str):
-    """Get payment status for checkout session"""
+async def get_payment_status(session_id: str, provider: str = None):
+    """Get payment status for checkout session from any provider"""
     try:
         # Find transaction
         transaction = await db.payment_transactions.find_one({"stripe_session_id": session_id})
         if not transaction:
             raise HTTPException(status_code=404, detail="Payment session not found")
         
+        # Get provider from transaction metadata if not specified
+        if not provider:
+            provider = transaction.get("metadata", {}).get("payment_provider", "stripe")
+        
         # If already processed, return cached status
-        if transaction["payment_status"] in ["paid", "failed", "expired"]:
+        if transaction["payment_status"] in ["paid", "completed", "failed", "expired", "cancelled"]:
             return {
                 "payment_status": transaction["payment_status"],
                 "status": transaction["status"],
                 "plan_type": transaction["plan_type"],
-                "amount": transaction["amount"]
+                "amount": transaction["amount"],
+                "provider": provider
             }
         
-        # Get Stripe client (need origin URL - use a default for status checks)
-        stripe_client = get_stripe_client("https://captivator.preview.emergentagent.com/")
+        # Initialize payment manager
+        payment_manager = get_payment_manager("https://captivator.preview.emergentagent.com/")
         
-        # Check status with Stripe
-        checkout_status: CheckoutStatusResponse = await stripe_client.get_checkout_status(session_id)
+        try:
+            provider_enum = PaymentProvider(provider)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid payment provider")
+        
+        # Check status with appropriate provider
+        payment_response = await payment_manager.get_payment_status(session_id, provider_enum)
+        
+        # Map payment statuses
+        status_map = {
+            PaymentStatus.COMPLETED: "paid",
+            PaymentStatus.PROCESSING: "processing", 
+            PaymentStatus.PENDING: "pending",
+            PaymentStatus.FAILED: "failed",
+            PaymentStatus.CANCELLED: "expired"
+        }
+        
+        mapped_status = status_map.get(payment_response.status, "pending")
         
         # Update transaction status
         await db.payment_transactions.update_one(
             {"stripe_session_id": session_id},
             {"$set": {
-                "payment_status": checkout_status.payment_status,
-                "status": checkout_status.status
+                "payment_status": mapped_status,
+                "status": "completed" if payment_response.status == PaymentStatus.COMPLETED else "processing"
             }}
         )
         
         # If payment is successful and not already processed, activate premium plan
-        if checkout_status.payment_status == "paid" and transaction["payment_status"] != "paid":
+        if payment_response.status == PaymentStatus.COMPLETED and transaction["payment_status"] != "paid":
             await activate_premium_plan(transaction["user_email"], transaction["plan_type"])
         
         return {
-            "payment_status": checkout_status.payment_status,
-            "status": checkout_status.status,
+            "payment_status": mapped_status,
+            "status": "completed" if payment_response.status == PaymentStatus.COMPLETED else "processing",
             "plan_type": transaction["plan_type"],
-            "amount": checkout_status.amount_total / 100  # Convert from cents
+            "amount": transaction["amount"],
+            "provider": provider
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error checking payment status: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to check payment status: {str(e)}")
