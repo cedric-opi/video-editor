@@ -1020,10 +1020,10 @@ async def activate_premium_plan(user_email: str, plan_type: str):
         logger.error(f"Error activating premium plan: {str(e)}")
 
 @api_router.post("/webhook/stripe")
-async def stripe_webhook(request: HTTPException):
+async def stripe_webhook(request: Request):
     """Handle Stripe webhooks"""
     try:
-        # Get raw body and signature
+        # Get raw body and signature  
         body = await request.body()
         signature = request.headers.get("Stripe-Signature")
         
