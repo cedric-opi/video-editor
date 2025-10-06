@@ -81,9 +81,9 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
       if (response.data.checkout_url) {
         // For Stripe/PayPal - redirect to checkout
         window.location.href = response.data.checkout_url;
-      } else if (response.data.provider === 'razorpay') {
-        // For Razorpay - initialize Razorpay checkout
-        handleRazorpayCheckout(response.data.order_details, planType);
+      } else if (response.data.provider === 'momopay') {
+        // For MomoPay - initialize MomoPay checkout
+        handleMomoPayCheckout(response.data.order_details, planType);
       } else {
         throw new Error('Unknown payment provider response');
       }
