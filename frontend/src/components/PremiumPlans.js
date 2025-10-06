@@ -95,10 +95,10 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
     }
   };
 
-  const handleRazorpayCheckout = (orderDetails, planType) => {
-    // This would be implemented if Razorpay is needed
+  const handleMomoPayCheckout = (orderDetails, planType) => {
+    // This would be implemented if MomoPay specific handling is needed
     // For now, fallback to other providers
-    alert('Razorpay checkout not implemented yet. Please use Credit Card or PayPal.');
+    alert('MomoPay checkout not fully implemented yet. Please use Credit Card or PayPal.');
     setProcessingPayment(false);
   };
 
