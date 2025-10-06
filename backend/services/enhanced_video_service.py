@@ -284,7 +284,7 @@ class EnhancedVideoService:
                 "youtube_shorts": "Strong hooks, clear value delivery"
             },
             "quality_tier": usage_tier,
-            "analysis_model": "gpt-5-enhanced-default"
+            "analysis_model": "gpt-4o-enhanced-default"
         }
     
     def _generate_professional_subtitles(self, start: float, end: float, segment_num: int, usage_tier: str) -> str:
