@@ -141,12 +141,17 @@ class ViralVideoAnalyzerTester:
     def create_test_video_file(self):
         """Create a simple test video file for testing"""
         try:
-            # Create a simple test video using FFmpeg (if available)
-            # For testing purposes, we'll create a minimal MP4 file
-            test_video_content = b'\x00\x00\x00\x20ftypmp41\x00\x00\x00\x00mp41isom\x00\x00\x00\x08free'
-            return ('test_video.mp4', test_video_content, 'video/mp4')
+            # Use the pre-created test video file
+            test_video_path = '/tmp/test_video.mp4'
+            if os.path.exists(test_video_path):
+                with open(test_video_path, 'rb') as f:
+                    test_video_content = f.read()
+                return ('test_video.mp4', test_video_content, 'video/mp4')
+            else:
+                print(f"Warning: Test video file not found at {test_video_path}")
+                return None
         except Exception as e:
-            print(f"Warning: Could not create test video file: {str(e)}")
+            print(f"Warning: Could not read test video file: {str(e)}")
             return None
 
     def test_gpt5_configuration(self):
