@@ -700,6 +700,7 @@ class ViralVideoAnalyzerTester:
             'segmentation': 'Intelligent Video Segmentation (Max 3 segments)',
             'clip_creation': 'Premium Clip Creation with AI-Guided Editing',
             'subtitles': 'Enhanced Subtitles with Emotional Cues',
+            'direct_analyze': 'Direct /api/video/analyze Endpoint',
             'fallback': 'GPT-5 to GPT-4 Fallback System'
         }
         
