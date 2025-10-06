@@ -641,6 +641,93 @@ async def debug_files(video_id: str):
         logger.error(f"Debug error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
 
+@api_router.post("/create-test-video/{video_id}")
+async def create_test_video(video_id: str):
+    """Create a test video for development purposes"""
+    try:
+        # Create a simple test video using ffmpeg
+        test_video_path = f"/tmp/upload_{video_id}.mp4"
+        
+        # Create a 30-second test video with color bars
+        (
+            ffmpeg
+            .input('color=c=blue:size=640x480:d=30', f='lavfi')
+            .output(test_video_path, vcodec='libx264', pix_fmt='yuv420p')
+            .overwrite_output()
+            .run(quiet=True)
+        )
+        
+        if not os.path.exists(test_video_path):
+            raise HTTPException(status_code=500, detail="Failed to create test video")
+        
+        # Create video record
+        video_upload = VideoUpload(
+            id=video_id,
+            filename=test_video_path,
+            original_filename="test_video.mp4",
+            file_size=os.path.getsize(test_video_path),
+            duration=30.0,
+            status="completed"
+        )
+        
+        await db.video_uploads.insert_one(video_upload.dict())
+        
+        # Create test segments
+        segments = [
+            VideoSegment(
+                video_id=video_id,
+                segment_number=1,
+                start_time=0.0,
+                end_time=15.0,
+                duration=15.0,
+                caption_text="🔥 Amazing viral technique #1",
+                audio_script="This is the first amazing highlight from your viral content.",
+                highlight_score=0.9
+            ),
+            VideoSegment(
+                video_id=video_id,
+                segment_number=2,
+                start_time=15.0,
+                end_time=30.0,
+                duration=15.0,
+                caption_text="💯 Epic moment that hooks viewers",
+                audio_script="Here's the second epic moment that will keep viewers engaged.",
+                highlight_score=0.8
+            )
+        ]
+        
+        for segment in segments:
+            await db.video_segments.insert_one(segment.dict())
+        
+        # Create test analysis
+        analysis = ViralAnalysis(
+            video_id=video_id,
+            analysis_text="This test video demonstrates strong viral potential with clear visual appeal and engaging pacing.",
+            viral_techniques=["Strong Opening", "Visual Appeal", "Clear Pacing", "Engaging Content"],
+            engagement_factors=["Visual Impact", "Color Psychology", "Consistent Branding", "Hook Strategy"],
+            content_summary="Test video with solid color background demonstrating basic viral video principles."
+        )
+        
+        await db.viral_analysis.insert_one(analysis.dict())
+        
+        # Set processing status to completed
+        await db.processing_status.update_one(
+            {"video_id": video_id},
+            {"$set": {"status": "completed", "progress": 100, "message": "Test video created successfully!"}},
+            upsert=True
+        )
+        
+        return {
+            "message": "Test video created successfully",
+            "video_id": video_id,
+            "file_path": test_video_path,
+            "segments_created": len(segments)
+        }
+        
+    except Exception as e:
+        logger.error(f"Test video creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Test video creation failed: {str(e)}")
+
 @api_router.delete("/video/{video_id}")
 async def delete_video(video_id: str):
     """Delete video and all associated data"""
