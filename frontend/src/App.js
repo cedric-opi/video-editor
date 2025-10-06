@@ -314,7 +314,12 @@ const ViralVideoAnalyzer = () => {
               Drag and drop your video here, or click to select
             </p>
             <p className="text-sm text-gray-500">
-              Supports MP4, AVI, MOV, MKV, WebM • Max 5 minutes • Up to 500MB
+              Supports MP4, AVI, MOV, MKV, WebM • Max {premiumStatus.max_video_duration/60} minutes • Up to 500MB
+              {!premiumStatus.is_premium && (
+                <span className="text-purple-400 ml-2">
+                  (Upgrade to Premium for 30-minute videos)
+                </span>
+              )}
             </p>
             {uploading && (
               <div className="mt-4">
