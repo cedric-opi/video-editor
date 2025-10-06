@@ -112,6 +112,9 @@ const ViralVideoAnalyzer = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (userEmail) {
+        formData.append('user_email', userEmail);
+      }
 
       const response = await axios.post(`${API}/upload-video`, formData, {
         headers: {
