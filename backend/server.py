@@ -150,8 +150,10 @@ async def create_video_segments(video_path: str, analysis_data: Dict[str, Any], 
     """Create video segments based on AI analysis"""
     try:
         segments = []
-        video = VideoFileClip(video_path)
-        video_duration = video.duration
+        
+        # Get video duration using ffprobe
+        probe = ffmpeg.probe(video_path)
+        video_duration = float(probe['streams'][0]['duration'])
         
         # Get highlight segments from analysis
         highlight_segments = analysis_data.get("highlight_segments", [])
@@ -199,7 +201,6 @@ async def create_video_segments(video_path: str, analysis_data: Dict[str, Any], 
                         highlight_score=score
                     ))
         
-        video.close()
         return segments
         
     except Exception as e:
