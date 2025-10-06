@@ -37,6 +37,11 @@ db = client[os.environ['DB_NAME']]
 # OpenAI client
 openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
 
+# Stripe client initialization function
+def get_stripe_client(host_url: str):
+    webhook_url = f"{host_url}api/webhook/stripe"
+    return StripeCheckout(api_key=os.environ.get('STRIPE_API_KEY'), webhook_url=webhook_url)
+
 # Create the main app without a prefix
 app = FastAPI(
     title="Viral Video Analyzer",
