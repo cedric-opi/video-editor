@@ -544,8 +544,13 @@ class MomoPayAdapter(PaymentAdapter):
                 error=str(e)
             )
     
-    async def handle_webhook(self, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
+    async def handle_webhook(self, payload: Dict[str, Any], headers: Dict[str, str], client_ip: str = None) -> Dict[str, Any]:
         try:
+            # Validate source IP for security
+            if client_ip and not self.validate_webhook_ip(client_ip):
+                logger.warning(f"🚫 Unauthorized webhook attempt from IP: {client_ip}")
+                raise ValueError(f"Unauthorized IP address: {client_ip}")
+            
             # Verify MomoPay webhook signature
             signature = headers.get("signature", "")
             
