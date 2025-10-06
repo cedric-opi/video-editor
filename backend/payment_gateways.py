@@ -268,6 +268,12 @@ class MomoPayAdapter(PaymentAdapter):
         self.access_key = os.environ.get('MOMO_ACCESS_KEY')
         self.secret_key = os.environ.get('MOMO_SECRET_KEY')
         self.endpoint = "https://test-payment.momo.vn/v2/gateway/api/create"
+        self.atm_endpoint = "https://test-payment.momo.vn/v2/gateway/api/atm/create"
+        self.query_endpoint = "https://test-payment.momo.vn/v2/gateway/api/query"
+        
+        # IP whitelist for security
+        self.allowed_incoming_ips = ["210.245.113.71"]
+        self.allowed_outgoing_ips = ["118.69.210.244", "118.68.171.198"]
     
     def generate_signature(self, data: Dict[str, Any]) -> str:
         """Generate HMAC-SHA256 signature for MomoPay requests"""
