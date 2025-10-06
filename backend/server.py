@@ -715,71 +715,90 @@ def format_time(seconds: float) -> str:
     
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millisecs:03d}"
 
-# Background task for video processing
-async def process_video_pipeline(video_id: str, video_path: str, duration: float):
-    """Complete video processing pipeline"""
+# Enhanced background task for video processing
+async def process_video_pipeline(video_id: str, video_path: str, duration: float, user_email: str = None):
+    """Enhanced video processing pipeline with AI-powered editing"""
     try:
+        # Get user's usage tier
+        usage_tier = await check_user_usage_limits(user_email)
+        
+        # Update usage count
+        if user_email:
+            await update_user_usage_count(user_email, video_id)
+        
         # Update status
         await db.processing_status.update_one(
             {"video_id": video_id},
-            {"$set": {"status": "analyzing", "progress": 20, "message": "Analyzing video content with AI..."}},
+            {"$set": {"status": "analyzing", "progress": 15, "message": f"🤖 AI analyzing video for viral potential ({usage_tier} quality)..."}},
             upsert=True
         )
         
-        # Step 1: AI Analysis
-        analysis_data = await analyze_video_content(video_path, duration)
+        # Step 1: Advanced AI Analysis
+        analysis_data = await analyze_video_content(video_path, duration, user_email)
         
-        # Save analysis
+        # Save enhanced analysis
         analysis = ViralAnalysis(
             video_id=video_id,
-            analysis_text=analysis_data["analysis_text"],
-            viral_techniques=analysis_data["viral_techniques"],
-            engagement_factors=analysis_data["engagement_factors"],
-            content_summary=analysis_data["content_summary"]
+            analysis_text=analysis_data.get("analysis_text", ""),
+            viral_techniques=analysis_data.get("viral_techniques", []),
+            engagement_factors=analysis_data.get("engagement_factors", []),
+            content_summary=analysis_data.get("content_summary", "")
         )
         await db.viral_analysis.insert_one(analysis.dict())
         
         # Update status
         await db.processing_status.update_one(
             {"video_id": video_id},
-            {"$set": {"status": "segmenting", "progress": 50, "message": "Creating video segments..."}}
+            {"$set": {"status": "segmenting", "progress": 35, "message": "✂️ Creating optimized viral segments..."}}
         )
         
-        # Step 2: Create segments
+        # Step 2: Create enhanced segments
         segments = await create_video_segments(video_path, analysis_data, video_id)
         
         # Update status
         await db.processing_status.update_one(
             {"video_id": video_id},
-            {"$set": {"status": "generating", "progress": 70, "message": "Generating captions and voice-overs..."}}
+            {"$set": {"status": "generating", "progress": 60, "message": "📝 Generating viral captions and scripts..."}}
         )
         
-        # Step 3: Generate captions and voice
-        segments = await generate_captions_and_voice(segments)
+        # Step 3: Generate enhanced captions and voice
+        segments = await generate_captions_and_voice(segments, usage_tier)
         
-        # Save segments to database
+        # Save segments to database with usage tier info
         for segment in segments:
-            await db.video_segments.insert_one(segment.dict())
+            segment_dict = segment.dict()
+            segment_dict["usage_tier"] = usage_tier
+            segment_dict["quality_level"] = "High" if usage_tier in ["premium", "free_high"] else "Standard"
+            await db.video_segments.insert_one(segment_dict)
         
         # Update status
         await db.processing_status.update_one(
             {"video_id": video_id},
-            {"$set": {"status": "finalizing", "progress": 90, "message": "Creating final video clips..."}}
+            {"$set": {"status": "finalizing", "progress": 85, "message": "🎬 Creating final viral-ready clips with captions..."}}
         )
         
-        # Step 4: Create final clips
-        final_clips = await create_final_clips(video_path, segments)
+        # Step 4: Create enhanced final clips
+        final_clips = await create_final_clips(video_path, segments, usage_tier)
+        
+        # Determine completion message based on usage tier
+        if usage_tier == "premium":
+            completion_msg = "🎉 Premium quality viral clips created! Unlimited processing available."
+        elif usage_tier == "free_high":
+            remaining = await get_user_usage_status(user_email)
+            completion_msg = f"✨ High quality clips created! {remaining.get('remaining_high_quality', 0)} high-quality edits remaining."
+        else:
+            completion_msg = "✅ Standard clips created. Upgrade to Premium for high-quality viral editing!"
         
         # Update final status
         await db.processing_status.update_one(
             {"video_id": video_id},
-            {"$set": {"status": "completed", "progress": 100, "message": "Processing completed successfully!"}}
+            {"$set": {"status": "completed", "progress": 100, "message": completion_msg}}
         )
         
-        logger.info(f"Video processing completed for {video_id}")
+        logger.info(f"Enhanced video processing completed for {video_id} with {usage_tier} tier")
         
     except Exception as e:
-        logger.error(f"Error in video processing pipeline: {str(e)}")
+        logger.error(f"Error in enhanced video processing pipeline: {str(e)}")
         await db.processing_status.update_one(
             {"video_id": video_id},
             {"$set": {"status": "error", "progress": 0, "message": f"Processing failed: {str(e)}", "error": str(e)}}
