@@ -23,9 +23,15 @@ const ViralVideoAnalyzer = () => {
   const [userEmail, setUserEmail] = useState('');
   const [premiumStatus, setPremiumStatus] = useState({ is_premium: false, max_video_duration: 300 });
 
-  // Load videos on component mount
+  // Load videos on component mount and check for upgrade parameter
   useEffect(() => {
     loadVideos();
+    
+    // Check for upgrade parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('upgrade') === 'true') {
+      setShowPremiumModal(true);
+    }
   }, []);
 
   // Poll processing status for active videos
