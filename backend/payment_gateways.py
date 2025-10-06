@@ -260,93 +260,199 @@ class PayPalAdapter(PaymentAdapter):
             logger.error(f"PayPal webhook handling failed: {str(e)}")
             raise
 
-class RazorpayAdapter(PaymentAdapter):
+class MomoPayAdapter(PaymentAdapter):
     def __init__(self, host_url: str):
-        self.webhook_url = f"{host_url}api/webhook/razorpay"
-        self.client = razorpay.Client(auth=(
-            os.environ.get('RAZORPAY_KEY_ID'),
-            os.environ.get('RAZORPAY_KEY_SECRET')
-        ))
+        self.webhook_url = f"{host_url}api/webhook/momopay"
+        self.partner_code = os.environ.get('MOMO_PARTNER_CODE')
+        self.access_key = os.environ.get('MOMO_ACCESS_KEY')
+        self.secret_key = os.environ.get('MOMO_SECRET_KEY')
+        self.endpoint = "https://test-payment.momo.vn/v2/gateway/api/create"
+    
+    def generate_signature(self, data: Dict[str, Any]) -> str:
+        """Generate HMAC-SHA256 signature for MomoPay requests"""
+        raw_signature = "&".join([f"{k}={v}" for k, v in sorted(data.items())])
+        signature = hmac.new(
+            self.secret_key.encode('utf-8'),
+            raw_signature.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        return signature
     
     async def create_checkout_session(self, request: PaymentRequest) -> PaymentResponse:
         try:
-            # Convert to paise (Razorpay uses smallest currency unit)
-            amount_paise = int(request.amount * 100)
+            # Convert USD to VND (Vietnamese Dong) - approximate rate 1 USD = 24,000 VND
+            amount_vnd = int(request.amount * 24000)
+            request_id = str(uuid.uuid4())
+            order_id = f"ORDER_{request.plan_type}_{int(time.time())}"
             
-            order_data = {
-                "amount": amount_paise,
-                "currency": request.currency.upper(),
-                "receipt": f"receipt_{request.plan_type}_{int(time.time())}",
-                "notes": {
+            # MomoPay request data
+            request_data = {
+                "partnerCode": self.partner_code,
+                "partnerName": "Viral Video Analyzer",
+                "storeId": "ViralVideoStore",
+                "requestId": request_id,
+                "amount": amount_vnd,
+                "orderId": order_id,
+                "orderInfo": f"Premium Plan: {request.plan_type}",
+                "redirectUrl": request.success_url.replace("{CHECKOUT_SESSION_ID}", request_id).replace("{PROVIDER}", "momopay"),
+                "ipnUrl": self.webhook_url,
+                "lang": "en",  # Use English for international users
+                "extraData": json.dumps({
                     "user_email": request.user_email,
                     "plan_type": request.plan_type,
-                    "source": "viral_video_analyzer",
                     **request.metadata
-                }
+                }),
+                "requestType": "payWithATM",  # Support ATM cards
             }
             
-            order = self.client.order.create(data=order_data)
+            # Generate signature for authentication
+            signature_data = {
+                "accessKey": self.access_key,
+                "amount": str(amount_vnd),
+                "extraData": request_data["extraData"],
+                "ipnUrl": self.webhook_url,
+                "orderId": order_id,
+                "orderInfo": request_data["orderInfo"],
+                "partnerCode": self.partner_code,
+                "redirectUrl": request_data["redirectUrl"],
+                "requestId": request_id,
+                "requestType": "payWithATM"
+            }
             
-            # Razorpay doesn't have a direct checkout URL like Stripe/PayPal
-            # The frontend will handle the Razorpay checkout with the order ID
-            return PaymentResponse(
-                provider=PaymentProvider.RAZORPAY,
-                order_id=order['id'],
-                status=PaymentStatus.PENDING,
-                raw_response=order
+            request_data["signature"] = self.generate_signature(signature_data)
+            
+            # Make request to MomoPay API
+            response = requests.post(
+                self.endpoint,
+                json=request_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30
             )
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get("resultCode") == 0:
+                return PaymentResponse(
+                    provider=PaymentProvider.MOMOPAY,
+                    checkout_url=result.get("payUrl"),
+                    session_id=request_id,
+                    order_id=order_id,
+                    status=PaymentStatus.PENDING,
+                    raw_response=result
+                )
+            else:
+                return PaymentResponse(
+                    provider=PaymentProvider.MOMOPAY,
+                    status=PaymentStatus.FAILED,
+                    error=f"MomoPay error: {result.get('message', 'Unknown error')}"
+                )
             
         except Exception as e:
-            logger.error(f"Razorpay order creation failed: {str(e)}")
+            logger.error(f"MomoPay order creation failed: {str(e)}")
             return PaymentResponse(
-                provider=PaymentProvider.RAZORPAY,
+                provider=PaymentProvider.MOMOPAY,
                 status=PaymentStatus.FAILED,
                 error=str(e)
             )
     
-    async def get_payment_status(self, payment_id: str) -> PaymentResponse:
+    async def get_payment_status(self, order_id: str) -> PaymentResponse:
         try:
-            payment = self.client.payment.fetch(payment_id)
+            request_id = str(uuid.uuid4())
             
+            # MomoPay status query data
+            status_data = {
+                "partnerCode": self.partner_code,
+                "requestId": request_id,
+                "orderId": order_id,
+                "lang": "en"
+            }
+            
+            # Generate signature for status query
+            signature_data = {
+                "accessKey": self.access_key,
+                "orderId": order_id,
+                "partnerCode": self.partner_code,
+                "requestId": request_id
+            }
+            
+            status_data["signature"] = self.generate_signature(signature_data)
+            
+            # Query payment status
+            response = requests.post(
+                "https://test-payment.momo.vn/v2/gateway/api/query",
+                json=status_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            # Map MomoPay result codes to payment status
             status_map = {
-                "captured": PaymentStatus.COMPLETED,
-                "authorized": PaymentStatus.PROCESSING,
-                "failed": PaymentStatus.FAILED,
-                "refunded": PaymentStatus.CANCELLED
+                0: PaymentStatus.COMPLETED,     # Success
+                9000: PaymentStatus.PROCESSING, # Transaction is being processed
+                1000: PaymentStatus.FAILED,     # Transaction failed
+                1001: PaymentStatus.FAILED,     # Transaction failed
+                1002: PaymentStatus.FAILED,     # Transaction rejected by issuer
+                1003: PaymentStatus.CANCELLED,  # Transaction cancelled by user
+                1004: PaymentStatus.FAILED,     # Transaction failed due to insufficient funds
+                1005: PaymentStatus.FAILED,     # Transaction failed due to wrong format
+                1006: PaymentStatus.FAILED,     # Transaction failed due to expired
             }
             
             return PaymentResponse(
-                provider=PaymentProvider.RAZORPAY,
-                session_id=payment_id,
-                status=status_map.get(payment['status'], PaymentStatus.PENDING),
-                raw_response=payment
+                provider=PaymentProvider.MOMOPAY,
+                session_id=order_id,
+                status=status_map.get(result.get("resultCode"), PaymentStatus.PENDING),
+                raw_response=result
             )
             
         except Exception as e:
-            logger.error(f"Razorpay status check failed: {str(e)}")
+            logger.error(f"MomoPay status check failed: {str(e)}")
             return PaymentResponse(
-                provider=PaymentProvider.RAZORPAY,
+                provider=PaymentProvider.MOMOPAY,
                 status=PaymentStatus.FAILED,
                 error=str(e)
             )
     
     async def handle_webhook(self, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
         try:
-            # Razorpay webhook verification
-            signature = headers.get("X-Razorpay-Signature", "")
-            # Note: Webhook secret verification should be implemented here
+            # Verify MomoPay webhook signature
+            signature = headers.get("signature", "")
             
-            event_type = payload.get("event", "")
-            payment = payload.get("payload", {}).get("payment", {}).get("entity", {})
+            # Generate expected signature for verification
+            signature_data = {
+                "accessKey": self.access_key,
+                "amount": str(payload.get("amount", "")),
+                "extraData": payload.get("extraData", ""),
+                "message": payload.get("message", ""),
+                "orderId": payload.get("orderId", ""),
+                "orderInfo": payload.get("orderInfo", ""),
+                "orderType": payload.get("orderType", ""),
+                "partnerCode": payload.get("partnerCode", ""),
+                "payType": payload.get("payType", ""),
+                "requestId": payload.get("requestId", ""),
+                "responseTime": str(payload.get("responseTime", "")),
+                "resultCode": str(payload.get("resultCode", "")),
+                "transId": str(payload.get("transId", ""))
+            }
+            
+            expected_signature = self.generate_signature(signature_data)
+            
+            if not hmac.compare_digest(expected_signature, signature):
+                raise ValueError("Invalid webhook signature")
             
             return {
-                "provider": "razorpay",
-                "event_type": event_type,
-                "payment_id": payment.get("id"),
-                "status": payment.get("status")
+                "provider": "momopay",
+                "event_type": "payment_status_update",
+                "order_id": payload.get("orderId"),
+                "result_code": payload.get("resultCode"),
+                "transaction_id": payload.get("transId"),
+                "status": "completed" if payload.get("resultCode") == 0 else "failed"
             }
+            
         except Exception as e:
-            logger.error(f"Razorpay webhook handling failed: {str(e)}")
+            logger.error(f"MomoPay webhook handling failed: {str(e)}")
             raise
 
 class PaymentGatewayManager:
