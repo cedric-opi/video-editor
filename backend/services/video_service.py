@@ -302,7 +302,23 @@ class VideoService:
         return segments
     
     async def create_professional_clips(self, video_path: str, segments: List[VideoSegment], usage_tier: str = "standard") -> List[str]:
-        """Create professional video clips with embedded subtitles"""
+        """Create professional video clips with AI-enhanced editing and subtitles"""
+        try:
+            # Use GPT-5 enhanced clip creation if available
+            if self.use_gpt5 and self.enhanced_service:
+                logger.info("🎬 Creating premium clips with GPT-5 AI editing")
+                return await self.enhanced_service.create_premium_clips_with_ai_editing(video_path, segments, usage_tier)
+            
+            # Fallback to standard clip creation
+            logger.info("⚡ Creating clips with standard method")
+            return await self._create_standard_clips(video_path, segments, usage_tier)
+            
+        except Exception as e:
+            logger.error(f"Error in clip creation: {str(e)}")
+            return []
+    
+    async def _create_standard_clips(self, video_path: str, segments: List[VideoSegment], usage_tier: str = "standard") -> List[str]:
+        """Standard clip creation method"""
         try:
             final_clips = []
             quality_config = QUALITY_TIERS.get(usage_tier, QUALITY_TIERS["standard"])
