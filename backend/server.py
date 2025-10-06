@@ -17,8 +17,7 @@ import shutil
 
 # Video processing imports
 import ffmpeg
-import moviepy.editor as mp
-from moviepy.editor import VideoFileClip, CompositeVideoClip, TextClip, AudioFileClip, CompositeAudioClip
+import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
 # OpenAI imports
