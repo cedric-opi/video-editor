@@ -205,39 +205,48 @@ test_plan:
 
   - task: "MomoPay ATM Card Support"
     implemented: true
-    working: false  # needs testing
+    working: true
     file: "payment_gateways.py, services/payment_service.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: false
         - agent: "main"
         - comment: "Implemented ATM card payment support with 10+ Vietnamese banks, enhanced MomoPay adapter with ATM-specific endpoints and request types."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED - ATM Card Support working excellently. Successfully tested: /api/payment-providers endpoint shows MomoPay with ATM Cards support for Vietnamese market, description includes 'ATM Cards, Credit Cards, MoMo Wallet (Vietnam)', VND and USD currency support confirmed. 10+ Vietnamese banks configured in backend (VIETCOMBANK, BIDV, VIETINBANK, TECHCOMBANK, ACB, MB, SACOMBANK, AGRIBANK, VPBANK, TPB, SHB). Enhanced MomoPay integration working with demo mode for testing."
 
   - task: "Automatic Currency Conversion"
     implemented: true
-    working: false  # needs testing
+    working: true
     file: "payment_gateways.py, services/payment_service.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: false
         - agent: "main"
         - comment: "Added live exchange rate API integration with fallback rates. Real-time USD to VND conversion for accurate pricing."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED - Automatic Currency Conversion working correctly. Successfully tested: MomoPay checkout creation with USD to VND conversion, system running in demo mode with fallback rates (1 USD = 24,000 VND configured), live exchange rate API integration implemented (api.exchangerate-api.com), both USD and VND amounts returned in payment responses. Currency conversion logic working as expected for Vietnamese market."
 
   - task: "MomoPay IP Protocol Security"
     implemented: true
-    working: false  # needs testing
+    working: true
     file: "payment_gateways.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: false
         - agent: "main"
         - comment: "Implemented IP whitelist validation for incoming webhook requests from MomoPay authorized IPs (210.245.113.71). Enhanced webhook signature validation."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED - MomoPay IP Protocol Security working excellently. Successfully tested: Webhook security rejecting invalid signatures (400 status), IP whitelist validation implemented for authorized MomoPay IPs (210.245.113.71), HMAC-SHA256 signature validation working correctly, unauthorized webhook requests properly rejected. Enhanced security measures active and protecting against invalid webhook attempts."
 
   - task: "MOMOPAY_SETUP.md Documentation"
     implemented: true
