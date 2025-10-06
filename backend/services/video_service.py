@@ -223,72 +223,83 @@ class VideoService:
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millisecs:03d}"
     
     async def create_video_segments(self, video_path: str, analysis_data: Dict[str, Any], video_id: str) -> List[VideoSegment]:
-        """Create video segments with enhanced subtitle content"""
+        """Create video segments with enhanced AI-guided content"""
         try:
-            segments = []
+            # Use GPT-5 enhanced segmentation if available
+            if self.use_gpt5 and self.enhanced_service:
+                logger.info("🎯 Creating intelligent segments with GPT-5")
+                return await self.enhanced_service.create_intelligent_segments(video_path, analysis_data, video_id)
             
-            # Get video duration
-            probe = ffmpeg.probe(video_path)
-            video_duration = float(probe['streams'][0]['duration'])
-            
-            # Use AI-optimized segments
-            optimized_segments = analysis_data.get("optimized_segments", analysis_data.get("highlight_segments", []))
-            
-            if not optimized_segments:
-                # Fallback to automatic segmentation with 3-segment limit for long videos
-                max_segments = MAX_SEGMENTS_LONG_VIDEO if video_duration > 180 else 4
-                segment_duration = min(video_duration / max_segments, SEGMENT_MAX_DURATION)
-                
-                current_time = 0
-                segment_num = 1
-                
-                while current_time < video_duration and segment_num <= max_segments:
-                    end_time = min(current_time + segment_duration, video_duration)
-                    
-                    if end_time - current_time >= SEGMENT_MIN_DURATION:
-                        segments.append(VideoSegment(
-                            video_id=video_id,
-                            segment_number=segment_num,
-                            start_time=current_time,
-                            end_time=end_time,
-                            duration=end_time - current_time,
-                            caption_text=f"Segment {segment_num}",
-                            audio_script=f"This is segment {segment_num} of viral content.",
-                            highlight_score=0.7,
-                            subtitle_content=self._generate_default_subtitles(current_time, end_time, segment_num)
-                        ))
-                        segment_num += 1
-                    
-                    current_time = end_time
-            else:
-                # Use AI-optimized segments
-                for i, segment_data in enumerate(optimized_segments):
-                    start_time = segment_data.get("start", 0)
-                    end_time = segment_data.get("end", start_time + 15)
-                    purpose = segment_data.get("purpose", f"Segment {i+1}")
-                    score = segment_data.get("viral_score", 0.7)
-                    subtitle_content = segment_data.get("subtitle_content", "")
-                    
-                    if end_time <= video_duration and end_time - start_time >= SEGMENT_MIN_DURATION:
-                        segments.append(VideoSegment(
-                            video_id=video_id,
-                            segment_number=i + 1,
-                            start_time=start_time,
-                            end_time=end_time,
-                            duration=end_time - start_time,
-                            caption_text=segment_data.get("caption_text", purpose),
-                            audio_script=segment_data.get("description", f"Key moment: {purpose}"),
-                            highlight_score=score,
-                            purpose=purpose,
-                            viral_score=score,
-                            subtitle_content=subtitle_content
-                        ))
-            
-            return segments
+            # Fallback to standard segmentation
+            logger.info("⚡ Creating segments with standard method")
+            return await self._create_standard_segments(video_path, analysis_data, video_id)
             
         except Exception as e:
             logger.error(f"Error creating video segments: {str(e)}")
             return []
+    
+    async def _create_standard_segments(self, video_path: str, analysis_data: Dict[str, Any], video_id: str) -> List[VideoSegment]:
+        """Standard segment creation method"""
+        segments = []
+        
+        # Get video duration
+        probe = ffmpeg.probe(video_path)
+        video_duration = float(probe['streams'][0]['duration'])
+        
+        # Use AI-optimized segments
+        optimized_segments = analysis_data.get("optimized_segments", analysis_data.get("highlight_segments", []))
+        
+        if not optimized_segments:
+            # Fallback to automatic segmentation with 3-segment limit for long videos
+            max_segments = MAX_SEGMENTS_LONG_VIDEO if video_duration > 180 else 4
+            segment_duration = min(video_duration / max_segments, SEGMENT_MAX_DURATION)
+            
+            current_time = 0
+            segment_num = 1
+            
+            while current_time < video_duration and segment_num <= max_segments:
+                end_time = min(current_time + segment_duration, video_duration)
+                
+                if end_time - current_time >= SEGMENT_MIN_DURATION:
+                    segments.append(VideoSegment(
+                        video_id=video_id,
+                        segment_number=segment_num,
+                        start_time=current_time,
+                        end_time=end_time,
+                        duration=end_time - current_time,
+                        caption_text=f"Segment {segment_num}",
+                        audio_script=f"This is segment {segment_num} of viral content.",
+                        highlight_score=0.7,
+                        subtitle_content=self._generate_default_subtitles(current_time, end_time, segment_num)
+                    ))
+                    segment_num += 1
+                
+                current_time = end_time
+        else:
+            # Use AI-optimized segments
+            for i, segment_data in enumerate(optimized_segments):
+                start_time = segment_data.get("start", 0)
+                end_time = segment_data.get("end", start_time + 15)
+                purpose = segment_data.get("purpose", f"Segment {i+1}")
+                score = segment_data.get("viral_score", 0.7)
+                subtitle_content = segment_data.get("subtitle_content", "")
+                
+                if end_time <= video_duration and end_time - start_time >= SEGMENT_MIN_DURATION:
+                    segments.append(VideoSegment(
+                        video_id=video_id,
+                        segment_number=i + 1,
+                        start_time=start_time,
+                        end_time=end_time,
+                        duration=end_time - start_time,
+                        caption_text=segment_data.get("caption_text", purpose),
+                        audio_script=segment_data.get("description", f"Key moment: {purpose}"),
+                        highlight_score=score,
+                        purpose=purpose,
+                        viral_score=score,
+                        subtitle_content=subtitle_content
+                    ))
+        
+        return segments
     
     async def create_professional_clips(self, video_path: str, segments: List[VideoSegment], usage_tier: str = "standard") -> List[str]:
         """Create professional video clips with embedded subtitles"""
