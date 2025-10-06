@@ -198,8 +198,8 @@ class EnhancedVideoService:
                 return self._create_gpt5_enhanced_default(duration, usage_tier, max_segments)
         
         except Exception as e:
-            logger.error(f"Error in GPT-5 video analysis: {str(e)}")
-            return self._create_gpt5_enhanced_default(duration, usage_tier, max_segments)
+            logger.error(f"Error in GPT-4o enhanced video analysis: {str(e)}")
+            return self._create_gpt4o_enhanced_default(duration, usage_tier, max_segments)
     
     def _create_gpt5_enhanced_default(self, duration: float, usage_tier: str, max_segments: int) -> Dict[str, Any]:
         """Create enhanced default analysis with GPT-5 quality when AI fails"""
