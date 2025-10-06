@@ -29,23 +29,37 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
 
   const loadPaymentProviders = async () => {
     try {
-      // Try to detect user region (simplified approach)
-      const userRegion = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/')[0];
-      const regionMap = {
-        'Asia': 'IN',
-        'America': 'US',
-        'Europe': 'GB'
-      };
+      // Detect user region more accurately
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let userRegion = 'US'; // Default
       
-      const response = await axios.get(`${API}/payment-providers?region=${regionMap[userRegion] || 'US'}`);
+      // Map timezone to country codes
+      if (timeZone.includes('Ho_Chi_Minh') || timeZone.includes('Asia/Saigon')) {
+        userRegion = 'VN'; // Vietnam
+      } else if (timeZone.includes('Bangkok')) {
+        userRegion = 'TH'; // Thailand  
+      } else if (timeZone.includes('Phnom_Penh')) {
+        userRegion = 'KH'; // Cambodia
+      } else if (timeZone.includes('Vientiane')) {
+        userRegion = 'LA'; // Laos
+      } else if (timeZone.includes('Yangon')) {
+        userRegion = 'MM'; // Myanmar
+      } else if (timeZone.includes('Europe/')) {
+        userRegion = 'GB'; // Europe
+      }
+      
+      console.log('Detected region:', userRegion, 'from timezone:', timeZone);
+      
+      const response = await axios.get(`${API}/payment-providers?region=${userRegion}`);
       setPaymentProviders(response.data.available_providers);
       setSelectedProvider(response.data.recommended);
     } catch (error) {
       console.error('Error loading payment providers:', error);
-      // Fallback to default providers
+      // Fallback to include MomoPay for testing
       setPaymentProviders([
         { provider: 'stripe', name: 'Credit Card (Stripe)', description: 'Pay with Visa, Mastercard, American Express' },
-        { provider: 'paypal', name: 'PayPal', description: 'Pay with PayPal account or credit card' }
+        { provider: 'paypal', name: 'PayPal', description: 'Pay with PayPal account or credit card' },
+        { provider: 'momopay', name: 'MomoPay', description: 'ATM Cards, Credit Cards, MoMo Wallet (Vietnam)' }
       ]);
       setSelectedProvider('stripe');
     } finally {
