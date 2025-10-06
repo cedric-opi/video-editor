@@ -476,68 +476,125 @@ async def create_video_segments(video_path: str, analysis_data: Dict[str, Any], 
         logger.error(f"Error creating segments: {str(e)}")
         return []
 
-async def generate_captions_and_voice(segments: List[VideoSegment]) -> List[VideoSegment]:
-    """Generate AI captions and voice-overs for segments"""
+async def generate_captions_and_voice(segments: List[VideoSegment], usage_tier: str = "standard") -> List[VideoSegment]:
+    """Generate enhanced AI captions and voice-overs based on usage tier"""
     try:
         for segment in segments:
-            # Generate enhanced caption using GPT-4
-            caption_prompt = f"""
-            Create an engaging caption for a {segment.duration:.1f}-second viral video segment.
             
-            Context: {segment.caption_text}
+            if usage_tier in ["premium", "free_high"]:
+                # Premium/High-quality caption generation
+                caption_prompt = f"""
+                Create a VIRAL CAPTION for a {segment.duration:.1f}-second video segment that will maximize engagement and views.
+                
+                Segment Context: {segment.caption_text}
+                Segment Purpose: {getattr(segment, 'purpose', 'engaging content')}
+                
+                VIRAL CAPTION REQUIREMENTS:
+                - Must grab attention in first 3 words
+                - Create curiosity or emotional hook
+                - Include power words: "This", "Secret", "Finally", "Shocking", etc.
+                - Use emojis strategically (2-3 max)
+                - Ask questions or create cliffhangers
+                - Keep under 80 characters for mobile
+                - Make people want to share/comment
+                
+                Examples of viral patterns:
+                - "This changes everything about..."
+                - "Finally! The secret to..."
+                - "You won't believe what happens..."
+                - "This one trick will..."
+                
+                Return only the viral caption, nothing else.
+                """
+                
+                voice_prompt = f"""
+                Write a COMPELLING VOICE-OVER SCRIPT that will keep viewers watching until the end.
+                
+                Segment: {segment.duration:.1f} seconds
+                Context: {segment.caption_text}
+                
+                VOICE-OVER REQUIREMENTS:
+                - Hook viewers in first 2 seconds
+                - Speak at 160-180 words per minute (natural pace)
+                - Use conversational, energetic tone
+                - Create urgency or excitement
+                - Include micro-pauses for emphasis
+                - End with intrigue for next segment
+                - Match {segment.duration:.1f}-second duration exactly
+                
+                Script should be exactly {int(segment.duration * 3)} words (3 words per second average).
+                
+                Return only the voice script, nothing else.
+                """
+                
+                max_tokens = 80
+                temperature = 0.8
+                
+            else:
+                # Standard quality generation
+                caption_prompt = f"""
+                Create an engaging caption for a {segment.duration:.1f}-second video segment.
+                
+                Context: {segment.caption_text}
+                
+                Keep it simple, clear, and under 60 characters.
+                Return only the caption.
+                """
+                
+                voice_prompt = f"""
+                Create a voice script for {segment.duration:.1f} seconds.
+                Context: {segment.caption_text}
+                Keep it natural and conversational.
+                Return only the script.
+                """
+                
+                max_tokens = 40
+                temperature = 0.6
             
-            Requirements:
-            - Keep it under 100 characters
-            - Make it engaging and shareable
-            - Include relevant hashtags
-            - Focus on hook or value proposition
-            
-            Return only the caption text, nothing else.
-            """
-            
-            caption_response = await openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert at creating viral social media captions that drive engagement and shares."},
-                    {"role": "user", "content": caption_prompt}
-                ],
-                max_tokens=50,
-                temperature=0.8
-            )
-            
-            # Generate voice script
-            voice_prompt = f"""
-            Create a compelling voice-over script for a {segment.duration:.1f}-second video segment.
-            
-            Context: {segment.caption_text}
-            
-            Requirements:
-            - Natural speaking pace (about 150 words per minute)
-            - Engaging and conversational tone
-            - Clear call-to-action or value statement
-            - Fits within {segment.duration:.1f} seconds
-            
-            Return only the voice script, nothing else.
-            """
-            
-            voice_response = await openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert voice-over script writer for viral social media content."},
-                    {"role": "user", "content": voice_prompt}
-                ],
-                max_tokens=100,
-                temperature=0.7
-            )
-            
-            # Update segment with generated content
-            segment.caption_text = caption_response.choices[0].message.content.strip()
-            segment.audio_script = voice_response.choices[0].message.content.strip()
+            try:
+                # Generate caption
+                caption_response = await openai_client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You are a viral content expert who creates captions that get millions of views. You understand psychology, hooks, and what makes people engage."},
+                        {"role": "user", "content": caption_prompt}
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature
+                )
+                
+                # Generate voice script
+                voice_response = await openai_client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You are a professional voice-over writer who creates scripts that capture and maintain audience attention for viral content."},
+                        {"role": "user", "content": voice_prompt}
+                    ],
+                    max_tokens=max_tokens * 2,
+                    temperature=temperature
+                )
+                
+                # Update segment with enhanced content
+                segment.caption_text = caption_response.choices[0].message.content.strip()[:100]  # Ensure length limit
+                segment.audio_script = voice_response.choices[0].message.content.strip()
+                
+                # Add quality indicators
+                if usage_tier in ["premium", "free_high"]:
+                    if not segment.caption_text.startswith(('🔥', '✨', '💥', '⚡', '🚀')):
+                        # Add engaging emoji if not present
+                        emojis = ['🔥', '✨', '💥', '⚡', '🚀', '👀', '😱', '🤯']
+                        segment.caption_text = f"{emojis[hash(segment.caption_text) % len(emojis)]} {segment.caption_text}"
+                
+            except Exception as e:
+                logger.error(f"Error generating content for segment {segment.id}: {str(e)}")
+                # Use fallback content
+                segment.caption_text = f"Amazing moment #{segment.segment_number}"
+                segment.audio_script = f"Here's an incredible highlight from this viral content."
         
         return segments
         
     except Exception as e:
-        logger.error(f"Error generating captions and voice: {str(e)}")
+        logger.error(f"Error in enhanced caption generation: {str(e)}")
         return segments
 
 async def generate_audio_for_segment(text: str, segment_id: str) -> str:
