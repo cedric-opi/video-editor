@@ -426,9 +426,12 @@ class MomoPayAdapter(PaymentAdapter):
                 "extraData": json.dumps({
                     "user_email": request.user_email,
                     "plan_type": request.plan_type,
+                    "payment_method": "momo_wallet", 
+                    "exchange_rate": exchange_rate,
+                    "original_amount_usd": request.amount,
                     **request.metadata
                 }),
-                "requestType": "payWithATM",  # Support ATM cards
+                "requestType": "payWithMoMoATM",  # Support both wallet and ATM
             }
             
             # Generate signature for authentication
