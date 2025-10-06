@@ -272,6 +272,27 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
             <Globe className="w-6 h-6 text-blue-400" />
             Choose Payment Method
           </h3>
+          
+          {/* Region Test Selector */}
+          <div className="mb-4 text-center">
+            <label className="text-sm text-gray-400 mr-2">Test Region:</label>
+            <select 
+              onChange={(e) => {
+                const region = e.target.value;
+                axios.get(`${API}/payment-providers?region=${region}`)
+                  .then(response => {
+                    setPaymentProviders(response.data.available_providers);
+                    setSelectedProvider(response.data.recommended);
+                  });
+              }}
+              className="bg-gray-600 text-white px-3 py-1 rounded text-sm"
+            >
+              <option value="US">United States</option>
+              <option value="VN">Vietnam (MomoPay)</option>
+              <option value="TH">Thailand</option>
+              <option value="GB">Europe</option>
+            </select>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {paymentProviders.map((provider) => (
               <div
