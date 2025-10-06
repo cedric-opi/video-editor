@@ -530,8 +530,53 @@ async def download_segment(video_id: str, segment_number: int):
         # Look for the processed file
         segment_file = f"/tmp/segment_{segment['id']}.mp4"
         
+        logger.info(f"Looking for segment file: {segment_file}")
+        
         if not os.path.exists(segment_file):
-            raise HTTPException(status_code=404, detail="Processed segment file not found")
+            # If processed file doesn't exist, create it on-demand
+            logger.info(f"Segment file not found, creating on-demand for segment {segment['id']}")
+            
+            # Find original video
+            video = await db.video_uploads.find_one({"id": video_id})
+            if not video:
+                raise HTTPException(status_code=404, detail="Original video not found")
+            
+            original_video_path = video['filename']
+            if not os.path.exists(original_video_path):
+                raise HTTPException(status_code=404, detail="Original video file not found")
+            
+            # Create segment on-demand
+            try:
+                start_time = segment['start_time']
+                duration = segment['duration']
+                
+                logger.info(f"Creating segment: {start_time}s for {duration}s")
+                
+                (
+                    ffmpeg
+                    .input(original_video_path, ss=start_time, t=duration)
+                    .output(
+                        segment_file, 
+                        vcodec='libx264', 
+                        acodec='aac',
+                        **{'preset': 'fast'}
+                    )
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+                
+                if not os.path.exists(segment_file):
+                    raise HTTPException(status_code=500, detail="Failed to create segment file")
+                    
+            except ffmpeg.Error as e:
+                logger.error(f"FFmpeg error creating segment: {str(e)}")
+                raise HTTPException(status_code=500, detail="Failed to process video segment")
+        
+        # Verify file exists and has content
+        if not os.path.exists(segment_file) or os.path.getsize(segment_file) == 0:
+            raise HTTPException(status_code=404, detail="Segment file is empty or missing")
+        
+        logger.info(f"Serving segment file: {segment_file} (size: {os.path.getsize(segment_file)} bytes)")
         
         return FileResponse(
             segment_file,
@@ -543,7 +588,7 @@ async def download_segment(video_id: str, segment_number: int):
         raise
     except Exception as e:
         logger.error(f"Download error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Download failed")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 @api_router.get("/video-list")
 async def get_video_list():
