@@ -186,6 +186,7 @@ test_plan:
     - "GPT-5 Integration for Enhanced Video Analysis"
     - "Updated Video Service with GPT-5 Integration"
     - "EMERGENT_LLM_KEY Configuration"
+    - "Direct Video Analysis Endpoint (/api/video/analyze)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
