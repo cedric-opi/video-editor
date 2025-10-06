@@ -27,15 +27,15 @@ class VideoService:
     
     def __init__(self):
         self.openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-        # Initialize enhanced GPT-5 service
+        # Initialize enhanced GPT-4o service
         try:
             self.enhanced_service = EnhancedVideoService()
-            self.use_gpt5 = True
-            logger.info("✅ GPT-5 Enhanced Video Service initialized successfully")
+            self.use_enhanced = True
+            logger.info("✅ GPT-4o Enhanced Video Service initialized successfully")
         except Exception as e:
-            logger.warning(f"GPT-5 service initialization failed, falling back to GPT-4: {str(e)}")
+            logger.warning(f"Enhanced service initialization failed, falling back to standard GPT-4: {str(e)}")
             self.enhanced_service = None
-            self.use_gpt5 = False
+            self.use_enhanced = False
     
     async def analyze_video_content(self, video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
         """Advanced AI video analysis for viral content creation using GPT-5"""
