@@ -1,59 +1,42 @@
+"""
+Main FastAPI application server - Refactored and organized
+"""
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, BackgroundTasks, Request
-from fastapi.responses import FileResponse, StreamingResponse
-from dotenv import load_dotenv
+from fastapi.responses import FileResponse
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
-import tempfile
-import json
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-import uuid
-from datetime import datetime, timezone
-import asyncio
 import shutil
-
-# Video processing imports
 import ffmpeg
-import subprocess
-from PIL import Image, ImageDraw, ImageFont
+from pathlib import Path
 
-# OpenAI imports
-from openai import AsyncOpenAI
+# Import organized modules
+from config import CORS_ORIGINS, MAX_FILE_SIZE, PREMIUM_PLANS
+from database import connect_to_mongo, close_mongo_connection, get_database
+from models import VideoUpload, CheckoutRequest
+from services.user_service import UserService  
+from services.payment_service import MomoPayService
+from services.video_service import VideoService
+from payment_gateways import PaymentGatewayManager, PaymentRequest, PaymentProvider
 
-# Payment gateway imports
-from payment_gateways import PaymentGatewayManager, PaymentRequest, PaymentProvider, PaymentStatus
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# OpenAI client
-openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
-
-# Payment gateway manager initialization
-def get_payment_manager(host_url: str):
-    return PaymentGatewayManager(host_url)
-
-# Create the main app without a prefix
+# Create the main app
 app = FastAPI(
-    title="Viral Video Analyzer",
-    description="AI-powered viral video analysis and segmentation system",
-    version="1.0.0"
+    title="Viral Video Analyzer - Million Dollar System",
+    description="AI-powered viral video analysis and segmentation system with global payments",
+    version="2.0.0"
 )
 
-# Create a router with the /api prefix
+# Create API router
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Initialize services
+user_service = UserService()
+video_service = VideoService()
+momo_service = MomoPayService()
 
 # Premium plan pricing
 PREMIUM_PLANS = {
