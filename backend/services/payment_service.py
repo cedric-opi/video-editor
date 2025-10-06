@@ -103,7 +103,7 @@ class MomoPayService:
                 "orderId": order_id,
                 "orderInfo": f"Upgrade to {plan_type.replace('_', ' ').title()} - Viral Video Analyzer Premium",
                 "redirectUrl": success_url_formatted,
-                "ipnUrl": f"https://captivator.preview.emergentagent.com/api/webhook/momopay",
+                "ipnUrl": f"https://videditor-pro-3.preview.emergentagent.com/api/webhook/momopay",
                 "lang": "en",
                 "extraData": json.dumps({
                     "user_email": user_email,

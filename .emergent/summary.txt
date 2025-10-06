@@ -1,0 +1,106 @@
+<analysis>
+The AI engineer successfully built a Viral Video Analyzer from initial requirements. This involved setting up a FastAPI backend with MongoDB, a React frontend using Shadcn UI, and integrating OpenAI GPT-4 and Text-to-Speech for video analysis and voiceovers. A significant challenge was video processing, initially with  which failed, leading to a pivot to direct  calls. The system then evolved to include a premium plan using Stripe, followed by a global payment gateway supporting PayPal, and then MomoPay for the Southeast Asian market, replacing Razorpay. Recent efforts focused on refactoring the backend into modular services, enhancing AI video editing capabilities (including better analysis, captions, and segmentation), implementing usage tiers for free vs. premium users, improving MomoPay integration, adding sandbox support, and updating documentation for credential management. The system is currently in a refactored state, with basic video analysis, premium plans, and multi-gateway payments.
+</analysis>
+
+<product_requirements>
+The user aims to create a Viral Video Analyzer system. The core functionality involves:
+1.  **Video Analysis**: Users upload a video clip or video. The system analyzes it to identify viral knowledge and techniques.
+2.  **Video Segmentation**: After analysis, the system breaks the original video into chunks of best highlight short videos.
+3.  **Enhancements**: Each highlight video should include:
+    *   Captions at the center.
+    *   AI voice presentation.
+4.  **Output**: Users can save and re-upload these edited videos to social platforms.
+5.  **UI/UX**: The user interface should be minimal, easy to use, and follow modern design guidelines (Shadcn UI, specific fonts, no prohibited colors/gradients, micro-animations, proper spacing).
+6.  **Deployment Readiness**: The system should be ready for deployment to hosting.
+7.  **Monetization (Premium Plans)**: Implement a premium plan for longer video editing, allowing payment via Visa cards. A free plan with a 5-minute video limit, and premium plans (monthly/yearly) for up to 30 minutes.
+8.  **Global Payments**: Initially, Stripe, then expanded to a multi-gateway system supporting PayPal and eventually MomoPay (Vietnam) to replace Razorpay. Payment methods should be globally accessible.
+9.  **Improved AI Editing**: The AI system needs significant improvement to act as a perfect editor, performing attractive edits, meaningful content chunking, adding proper subtitles within the video, and dividing long videos (e.g., 5 minutes) into at most 3 sub-videos.
+10. **Usage Limits**: Implement a system where initial 1-2 video edits use most resources (high quality), after which video quality decreases for free users until they purchase a premium plan.
+11. **Code Organization**: Refactor the monolithic  into modular, functional files for better maintainability.
+12. **MomoPay Specifics**: Support VND and USD, include ATM card payment, automatic currency conversion, and use sandbox environment with provided IPs for incoming/outgoing protocols. Instructions for MomoPay credentials in README.
+</product_requirements>
+
+<key_technical_concepts>
+-   **FastAPI**: Python backend framework.
+-   **React**: Frontend library.
+-   **MongoDB**: Database.
+-   **OpenAI GPT-4**: For video analysis and content generation.
+-   **OpenAI Text-to-Speech**: For AI voice presentation.
+-   **FFmpeg**: For video processing (segmentation, adding captions).
+-   **Stripe, PayPal, MomoPay**: Payment gateway integrations.
+-   **Pydantic**: Data validation and serialization for FastAPI.
+-   **UUIDs**: Used for MongoDB object IDs and video IDs.
+-   **Shadcn UI**: Frontend component library.
+-   ****: Python module for running external commands like .
+</key_technical_concepts>
+
+<code_architecture>
+
+
+-   **/app/backend/server.py**:
+    -   **Summary**: Main FastAPI application entry point.
+    -   **Changes**: Initially contained all backend logic. Now refactored to import and register API routers from  modules (user, payment, video). Handles CORS, root endpoint, and global error handling.
+-   **/app/backend/models.py**:
+    -   **Summary**: Defines Pydantic models for data validation, request/response bodies, and MongoDB schemas (e.g., , , , ).
+    -   **Changes**: Newly created to centralize data models for user, video, and payment entities.
+-   **/app/backend/config.py**:
+    -   **Summary**: Manages application configuration and environment variables.
+    -   **Changes**: Newly created to load settings like database URL, API keys, and payment gateway credentials from  using .
+-   **/app/backend/database.py**:
+    -   **Summary**: Handles MongoDB connection and provides database client instance.
+    -   **Changes**: Newly created to encapsulate database connection logic, ensuring  (async MongoDB driver) is used.
+-   **/app/backend/services/user_service.py**:
+    -   **Summary**: Manages user-related operations (e.g., getting user usage status).
+    -   **Changes**: Newly created as part of refactoring.
+-   **/app/backend/services/payment_service.py**:
+    -   **Summary**: Contains payment-related business logic, interacting with .
+    -   **Changes**: Newly created to handle premium plan management, checkout session creation, webhook processing, and premium status checks.
+-   **/app/backend/services/video_service.py**:
+    -   **Summary**: Encapsulates video processing logic, including upload, analysis, segmentation, captioning, and AI voice.
+    -   **Changes**: Newly created to contain video analysis,  calls, and logic for quality tiers and usage limits.
+-   **/app/backend/payment_gateways.py**:
+    -   **Summary**: Abstracts payment gateway integrations (Stripe, PayPal, MomoPay).
+    -   **Changes**: Newly created, includes adapters for each payment provider, and a  to select the appropriate gateway based on region/provider. Includes mock mode for MomoPay.
+-   **/app/backend/.env**:
+    -   **Summary**: Stores environment variables for backend, including , , , , , , , .
+    -   **Changes**: OpenAI API key, then Stripe, PayPal, Razorpay (later replaced by MomoPay) keys were added.
+-   **/app/frontend/src/App.js**:
+    -   **Summary**: Main React component, handling routing and core layout.
+    -   **Changes**: Integrated video upload interface, displays video analysis and highlight clips. Added routes for payment success/cancel pages and components for premium plans.
+-   **/app/frontend/src/components/PremiumPlans.js**:
+    -   **Summary**: Component to display premium plans and handle payment initiation.
+    -   **Changes**: Displays free and premium tiers, allows user email input, handles checkout process with selected payment provider (Stripe, PayPal, MomoPay) and includes a region selector.
+-   **/app/frontend/src/components/PaymentSuccess.js**:
+    -   **Summary**: Page displayed after successful payment.
+    -   **Changes**: Newly created.
+-   **/app/frontend/src/components/PaymentCancel.js**:
+    -   **Summary**: Page displayed if payment is canceled.
+    -   **Changes**: Newly created.
+-   **/app/README.md**:
+    -   **Summary**: Project documentation.
+    -   **Changes**: Updated with instructions on how to set up MomoPay credentials.
+</code_architecture>
+
+<pending_tasks>
+-   Set up proper MomoPay sandbox credentials (user will provide later).
+-   Implement advanced AI prompting and a custom training plan for video editing, including in-video subtitles and logic to segment long videos into at most 3 sub-videos.
+-   Implement ATM card payment support for MomoPay.
+-   Implement automatic currency conversion for payments.
+-   Integrate MomoPay incoming/outgoing protocol IPs for webhook security.
+</pending_tasks>
+
+<current_work>
+Immediately before this summary request, the AI engineer was addressing critical user feedback regarding MomoPay integration and AI video editing quality, and code organization.
+
+The backend code has been significantly refactored into a modular structure with dedicated files for models, configuration, database, and services (user, payment, video).  now acts as a central orchestrator. A  module handles multi-payment provider logic (Stripe, PayPal, MomoPay).
+
+For MomoPay, a demo/mock mode was implemented to allow testing without live credentials, and the  was updated with instructions on where the user should add their MomoPay credentials once obtained. The frontend's  component was updated to correctly display MomoPay as an option based on region detection, and a manual region selector was added for testing.
+
+Improvements to the AI video editing pipeline were initiated, including adding a usage limits system, enhancing the core video processing for better captions and AI editing, updating the captions generation function, and adding a usage status endpoint. However, the user is still awaiting a comprehensive training the AI system solution for superior video quality, subtitles, and controlled segmentation of long videos.
+
+The system is currently in a refactored state, with MomoPay demo mode implemented, and initial steps taken for enhanced AI video editing and usage limits. The MomoPay authentication still requires actual credentials from the user.
+</current_work>
+
+<optional_next_step>
+Implement the advanced AI prompting and custom training plan for video editing, focusing on subtitles and improved segmentation.
+</optional_next_step>
