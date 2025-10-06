@@ -39,6 +39,20 @@ class MomoPayService:
         
         if self.demo_mode:
             logger.info("🧪 MomoPay running in DEMO MODE - payments will be simulated")
+        
+        # Supported Vietnamese banks for ATM payments
+        self.atm_banks = [
+            {"code": "VIETCOMBANK", "name": "Vietcombank", "display": "Ngân hàng TMCP Ngoại thương Việt Nam"},
+            {"code": "BIDV", "name": "BIDV", "display": "Ngân hàng TMCP Đầu tư và Phát triển Việt Nam"},
+            {"code": "VIETINBANK", "name": "VietinBank", "display": "Ngân hàng TMCP Công thương Việt Nam"},
+            {"code": "TECHCOMBANK", "name": "Techcombank", "display": "Ngân hàng TMCP Kỹ thương Việt Nam"},
+            {"code": "ACB", "name": "ACB", "display": "Ngân hàng TMCP Á Châu"},
+            {"code": "MB", "name": "MB Bank", "display": "Ngân hàng TMCP Quân đội"},
+            {"code": "SACOMBANK", "name": "Sacombank", "display": "Ngân hàng TMCP Sài Gòn Thương tín"},
+            {"code": "AGRIBANK", "name": "Agribank", "display": "Ngân hàng NN&PTNT Việt Nam"},
+            {"code": "VPBANK", "name": "VPBank", "display": "Ngân hàng TMCP Việt Nam Thịnh vượng"},
+            {"code": "TPB", "name": "TPBank", "display": "Ngân hàng TMCP Tiên Phong"}
+        ]
     
     def generate_signature(self, data: Dict[str, Any]) -> str:
         """Generate HMAC-SHA256 signature for MomoPay requests"""
