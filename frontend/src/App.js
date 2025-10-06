@@ -56,6 +56,26 @@ const ViralVideoAnalyzer = () => {
     }
   };
 
+  const checkPremiumStatus = async (email) => {
+    if (!email) return;
+    
+    try {
+      const response = await axios.post(`${API}/premium-status`, {
+        user_email: email
+      });
+      setPremiumStatus(response.data);
+    } catch (error) {
+      console.error('Error checking premium status:', error);
+    }
+  };
+
+  const handleEmailChange = (email) => {
+    setUserEmail(email);
+    if (email) {
+      checkPremiumStatus(email);
+    }
+  };
+
   const checkProcessingStatus = async (videoId) => {
     try {
       const response = await axios.get(`${API}/processing-status/${videoId}`);
