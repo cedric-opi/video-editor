@@ -603,6 +603,44 @@ async def get_video_list():
     
     return {"videos": videos}
 
+@api_router.get("/debug-files/{video_id}")
+async def debug_files(video_id: str):
+    """Debug endpoint to check what files exist for a video"""
+    try:
+        # Check original video
+        video = await db.video_uploads.find_one({"id": video_id})
+        original_file = video['filename'] if video else None
+        original_exists = os.path.exists(original_file) if original_file else False
+        
+        # Check segments
+        segments = await db.video_segments.find({"video_id": video_id}).to_list(length=None)
+        segment_files = []
+        
+        for segment in segments:
+            segment_file = f"/tmp/segment_{segment['id']}.mp4"
+            segment_files.append({
+                "segment_id": segment['id'],
+                "segment_number": segment['segment_number'],
+                "file_path": segment_file,
+                "exists": os.path.exists(segment_file),
+                "size": os.path.getsize(segment_file) if os.path.exists(segment_file) else 0
+            })
+        
+        return {
+            "video_id": video_id,
+            "original_file": {
+                "path": original_file,
+                "exists": original_exists,
+                "size": os.path.getsize(original_file) if original_exists else 0
+            },
+            "segments": segment_files,
+            "tmp_files": [f for f in os.listdir("/tmp") if video_id in f]
+        }
+        
+    except Exception as e:
+        logger.error(f"Debug error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
 @api_router.delete("/video/{video_id}")
 async def delete_video(video_id: str):
     """Delete video and all associated data"""
