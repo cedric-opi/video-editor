@@ -56,6 +56,54 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Premium plan pricing
+PREMIUM_PLANS = {
+    "premium_monthly": {
+        "name": "Premium Monthly",
+        "price": 9.99,
+        "description": "Upload videos up to 30 minutes, unlimited processing",
+        "max_video_duration": 1800,  # 30 minutes
+        "duration_days": 30
+    },
+    "premium_yearly": {
+        "name": "Premium Yearly", 
+        "price": 99.99,
+        "description": "Upload videos up to 30 minutes, unlimited processing + 2 months free",
+        "max_video_duration": 1800,  # 30 minutes
+        "duration_days": 365
+    }
+}
+
+# Helper function to check user premium status
+async def check_user_premium_status(user_email: str) -> Dict[str, Any]:
+    """Check if user has active premium subscription"""
+    try:
+        # Find active premium plan
+        active_plan = await db.premium_plans.find_one({
+            "user_email": user_email,
+            "status": "active",
+            "expires_at": {"$gt": datetime.now(timezone.utc)}
+        })
+        
+        if active_plan:
+            return {
+                "is_premium": True,
+                "plan_type": active_plan["plan_type"],
+                "expires_at": active_plan["expires_at"],
+                "max_video_duration": PREMIUM_PLANS[active_plan["plan_type"]]["max_video_duration"]
+            }
+        else:
+            return {
+                "is_premium": False,
+                "max_video_duration": 300  # 5 minutes for free users
+            }
+    except Exception as e:
+        logger.error(f"Error checking premium status: {str(e)}")
+        return {
+            "is_premium": False,
+            "max_video_duration": 300  # Default to free plan on error
+        }
+
 # Define Models
 class VideoUpload(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
