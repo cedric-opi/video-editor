@@ -799,7 +799,7 @@ class ViralVideoAnalyzerTester:
             # Test creating a checkout with USD that should convert to VND
             checkout_data = {
                 "user_email": "currency_test@example.com",
-                "plan_type": "monthly",
+                "plan_type": "premium_monthly",
                 "payment_provider": "momopay",
                 "currency": "VND",
                 "user_region": "VN",
