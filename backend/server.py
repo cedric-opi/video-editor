@@ -298,35 +298,40 @@ async def create_final_clips(video_path: str, segments: List[VideoSegment]) -> L
         final_clips = []
         
         for segment in segments:
-            # Generate audio first
-            audio_path = await generate_audio_for_segment(segment.audio_script, segment.id)
-            
-            # Extract video segment using ffmpeg
             output_path = f"/tmp/segment_{segment.id}.mp4"
             
             try:
-                # Extract video segment
+                logger.info(f"Creating clip for segment {segment.segment_number}: {segment.start_time}s - {segment.end_time}s")
+                
+                # Extract video segment using ffmpeg
                 (
                     ffmpeg
                     .input(video_path, ss=segment.start_time, t=segment.duration)
-                    .output(output_path, vcodec='libx264', acodec='aac')
+                    .output(
+                        output_path, 
+                        vcodec='libx264', 
+                        acodec='aac',
+                        **{'c:v': 'libx264', 'c:a': 'aac', 'preset': 'fast'}
+                    )
                     .overwrite_output()
                     .run(quiet=True)
                 )
                 
-                # If audio generation was successful, we could add it here
-                # For now, we'll keep the original audio and create basic clips
-                
-                final_clips.append(output_path)
+                # Verify the file was created
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    final_clips.append(output_path)
+                    logger.info(f"Successfully created segment file: {output_path}")
+                else:
+                    logger.error(f"Segment file not created or empty: {output_path}")
                 
             except ffmpeg.Error as e:
                 logger.error(f"FFmpeg error processing segment {segment.id}: {str(e)}")
                 continue
-            
-            # Cleanup audio file
-            if audio_path and os.path.exists(audio_path):
-                os.remove(audio_path)
+            except Exception as e:
+                logger.error(f"Unexpected error processing segment {segment.id}: {str(e)}")
+                continue
         
+        logger.info(f"Created {len(final_clips)} final clips out of {len(segments)} segments")
         return final_clips
         
     except Exception as e:
