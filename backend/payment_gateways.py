@@ -474,12 +474,15 @@ class PaymentGatewayManager:
             "CA": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL],
             "GB": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL],
             "EU": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL],
-            "IN": [PaymentProvider.RAZORPAY, PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
-            "MY": [PaymentProvider.RAZORPAY, PaymentProvider.PAYPAL],
-            "SG": [PaymentProvider.RAZORPAY, PaymentProvider.PAYPAL],
-            "ID": [PaymentProvider.RAZORPAY, PaymentProvider.PAYPAL],
-            "TH": [PaymentProvider.RAZORPAY, PaymentProvider.PAYPAL],
-            "PH": [PaymentProvider.RAZORPAY, PaymentProvider.PAYPAL],
+            "VN": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
+            "TH": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL],
+            "LA": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL],
+            "KH": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL],
+            "MM": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL],
+            "SG": [PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
+            "MY": [PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
+            "ID": [PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
+            "PH": [PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
             # Add more regions as needed
         }
     
