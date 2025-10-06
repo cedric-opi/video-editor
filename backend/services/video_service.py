@@ -304,9 +304,9 @@ class VideoService:
     async def create_professional_clips(self, video_path: str, segments: List[VideoSegment], usage_tier: str = "standard") -> List[str]:
         """Create professional video clips with AI-enhanced editing and subtitles"""
         try:
-            # Use GPT-5 enhanced clip creation if available
+            # Use GPT-4o enhanced clip creation if available
             if self.use_gpt5 and self.enhanced_service:
-                logger.info("🎬 Creating premium clips with GPT-5 AI editing")
+                logger.info("🎬 Creating premium clips with GPT-4o AI editing")
                 return await self.enhanced_service.create_premium_clips_with_ai_editing(video_path, segments, usage_tier)
             
             # Fallback to standard clip creation
