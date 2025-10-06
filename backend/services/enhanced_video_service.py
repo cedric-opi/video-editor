@@ -37,7 +37,7 @@ class EnhancedVideoService:
         if not self.api_key:
             raise ValueError("EMERGENT_LLM_KEY not found in environment variables")
         
-        # Initialize GPT-5 chat client
+        # Initialize GPT-4 chat client for faster response times
         self.llm_chat = LlmChat(
             api_key=self.api_key,
             session_id="video_analysis_session",
@@ -50,7 +50,7 @@ class EnhancedVideoService:
             - Creating content that consistently gets millions of views
             
             Your goal is to analyze videos and create the most engaging, viral-ready content possible."""
-        ).with_model("openai", "gpt-5")
+        ).with_model("openai", "gpt-4o")
     
     async def analyze_video_with_gpt5(self, video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
         """Advanced GPT-5 powered video analysis for maximum viral potential"""
