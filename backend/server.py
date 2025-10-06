@@ -59,6 +59,165 @@ async def root():
         "status": "operational"
     }
 
+@api_router.post("/video/analyze")
+async def analyze_video_direct(background_tasks: BackgroundTasks, file: UploadFile = File(...), user_email: str = None):
+    """Direct video analysis endpoint with GPT-5 enhanced processing"""
+    try:
+        # Validate file
+        if not file.content_type.startswith('video/'):
+            raise HTTPException(status_code=400, detail="File must be a video")
+        
+        # Check file size
+        if hasattr(file, 'size') and file.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large. Maximum 500MB allowed")
+        
+        # Create video record
+        video_id = str(uuid.uuid4())
+        
+        # Save uploaded file
+        temp_path = f"/tmp/analyze_{video_id}.mp4"
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Get video duration and validate
+        try:
+            probe = ffmpeg.probe(temp_path)
+            duration = float(probe['streams'][0]['duration'])
+            file_size = os.path.getsize(temp_path)
+            
+            # Check premium status and duration limits
+            if user_email:
+                premium_status = await user_service.check_user_premium_status(user_email)
+                max_duration = premium_status["max_video_duration"]
+                
+                if duration > max_duration:
+                    os.remove(temp_path)
+                    if premium_status["is_premium"]:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Video too long. Maximum {max_duration//60} minutes for your premium plan."
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Video too long. Maximum 5 minutes for free plan. Upgrade to premium for longer videos (up to 30 minutes)."
+                        )
+            else:
+                # No user email, use free plan limits
+                if duration > 300:  # 5 minutes
+                    os.remove(temp_path)
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Video too long. Maximum 5 minutes for free plan. Upgrade to premium for longer videos (up to 30 minutes)."
+                    )
+                
+        except HTTPException:
+            raise
+        except Exception as e:
+            os.remove(temp_path)
+            raise HTTPException(status_code=400, detail="Invalid video file")
+        
+        # Perform immediate GPT-5 enhanced analysis
+        logger.info(f"🧠 Starting direct GPT-5 video analysis for {video_id}")
+        
+        # Get usage tier
+        usage_tier = await user_service.check_user_usage_limits(user_email)
+        
+        # Analyze video content with GPT-5
+        analysis_data = await video_service.analyze_video_content(temp_path, duration, user_email)
+        
+        # Create intelligent segments
+        segments = await video_service.create_video_segments(temp_path, analysis_data, video_id)
+        
+        # Create video upload record for tracking
+        video_upload = VideoUpload(
+            id=video_id,
+            filename=temp_path,
+            original_filename=file.filename,
+            file_size=file_size,
+            duration=duration,
+            user_email=user_email
+        )
+        
+        db = await get_database()
+        await db.video_uploads.insert_one(video_upload.dict())
+        
+        # Save analysis
+        analysis = ViralAnalysis(
+            video_id=video_id,
+            analysis_text=analysis_data.get("analysis_text", ""),
+            viral_techniques=analysis_data.get("viral_techniques", []),
+            engagement_factors=analysis_data.get("engagement_factors", []),
+            content_summary=analysis_data.get("content_summary", ""),
+            viral_score=analysis_data.get("viral_score", 0.0),
+            content_type=analysis_data.get("content_type", ""),
+            editing_recommendations=analysis_data.get("editing_recommendations", [])
+        )
+        await db.viral_analysis.insert_one(analysis.dict())
+        
+        # Save segments
+        for segment in segments:
+            segment_dict = segment.dict()
+            segment_dict["quality_tier"] = usage_tier
+            await db.video_segments.insert_one(segment_dict)
+        
+        # Prepare response with enhanced GPT-5 fields
+        response_data = {
+            "video_id": video_id,
+            "analysis": {
+                "viral_score": analysis_data.get("viral_score", 0.0),
+                "content_type": analysis_data.get("content_type", ""),
+                "target_audience": analysis_data.get("target_audience", ""),
+                "viral_techniques": analysis_data.get("viral_techniques", []),
+                "engagement_factors": analysis_data.get("engagement_factors", []),
+                "content_summary": analysis_data.get("content_summary", ""),
+                "analysis_text": analysis_data.get("analysis_text", ""),
+                "hook_strategy": analysis_data.get("hook_strategy", ""),
+                "platform_optimization": analysis_data.get("platform_optimization", {}),
+                "editing_recommendations": analysis_data.get("editing_recommendations", []),
+                "subtitle_strategy": analysis_data.get("subtitle_strategy", ""),
+                "viral_prediction": analysis_data.get("viral_prediction", ""),
+                "quality_tier": usage_tier,
+                "analysis_model": analysis_data.get("analysis_model", "gpt-5")
+            },
+            "segments": [
+                {
+                    "segment_id": seg.segment_number,
+                    "start_time": seg.start_time,
+                    "end_time": seg.end_time,
+                    "duration": seg.duration,
+                    "purpose": getattr(seg, 'purpose', f"Segment {seg.segment_number}"),
+                    "viral_score": getattr(seg, 'viral_score', seg.highlight_score),
+                    "caption_text": seg.caption_text,
+                    "subtitle_content": getattr(seg, 'subtitle_content', ''),
+                    "editing_notes": getattr(seg, 'editing_notes', ''),
+                    "engagement_elements": getattr(seg, 'engagement_elements', [])
+                }
+                for seg in segments
+            ],
+            "video_info": {
+                "duration": duration,
+                "file_size": file_size,
+                "original_filename": file.filename
+            },
+            "processing_info": {
+                "gpt5_enhanced": True,
+                "max_segments_applied": len(segments) <= 3 if duration > 180 else True,
+                "intelligent_segmentation": True,
+                "professional_subtitles": True
+            }
+        }
+        
+        logger.info(f"✅ Direct GPT-5 analysis completed for {video_id} - Viral Score: {analysis_data.get('viral_score', 'N/A')}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Direct analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
 @api_router.post("/upload-video")
 async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = File(...), user_email: str = None):
     """Upload video for advanced AI processing"""
