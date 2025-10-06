@@ -888,11 +888,11 @@ async def get_payment_providers(region: str = None):
             "supported_regions": ["Global"],
             "currencies": ["USD", "EUR", "GBP", "CAD", "AUD", "JPY"]
         },
-        PaymentProvider.RAZORPAY: {
-            "name": "Razorpay",
-            "description": "Credit/Debit Cards, UPI, Net Banking, Wallets",
-            "supported_regions": ["IN", "MY", "SG"],
-            "currencies": ["INR", "MYR", "SGD"]
+        PaymentProvider.MOMOPAY: {
+            "name": "MomoPay",
+            "description": "ATM Cards, Credit Cards, MoMo Wallet (Vietnam)",
+            "supported_regions": ["VN", "TH", "LA", "KH", "MM"],
+            "currencies": ["VND", "USD"]
         }
     }
     
