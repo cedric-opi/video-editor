@@ -305,7 +305,7 @@ class VideoService:
         """Create professional video clips with AI-enhanced editing and subtitles"""
         try:
             # Use GPT-4o enhanced clip creation if available
-            if self.use_gpt5 and self.enhanced_service:
+            if self.use_enhanced and self.enhanced_service:
                 logger.info("🎬 Creating premium clips with GPT-4o AI editing")
                 return await self.enhanced_service.create_premium_clips_with_ai_editing(video_path, segments, usage_tier)
             
