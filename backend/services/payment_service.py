@@ -74,6 +74,9 @@ class MomoPayService:
                            currency: str, success_url: str, cancel_url: str) -> Dict[str, Any]:
         """Create MomoPay payment request"""
         try:
+            # 🧪 DEMO MODE: Simulate successful payment for testing
+            if self.demo_mode:
+                return await self._create_demo_payment(user_email, plan_type, amount, currency, success_url)
             # Convert amount to VND if needed
             if currency.upper() == "USD":
                 amount_vnd = int(self.convert_currency(amount, "USD", "VND"))
