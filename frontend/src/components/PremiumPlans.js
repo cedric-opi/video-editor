@@ -252,6 +252,39 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
           </div>
         </div>
 
+        {/* Payment Method Selection */}
+        <div className="bg-gray-700/30 rounded-xl p-6 mb-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Globe className="w-6 h-6 text-blue-400" />
+            Choose Payment Method
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paymentProviders.map((provider) => (
+              <div
+                key={provider.provider}
+                className={`p-4 rounded-lg cursor-pointer transition-all duration-200 border-2 ${
+                  selectedProvider === provider.provider
+                    ? 'border-purple-500 bg-purple-600/20'
+                    : 'border-gray-600 bg-gray-800/50 hover:border-gray-500'
+                }`}
+                onClick={() => setSelectedProvider(provider.provider)}
+                data-testid={`payment-provider-${provider.provider}`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <CreditCard className="w-5 h-5 text-purple-400" />
+                  <h4 className="font-semibold text-white">{provider.name}</h4>
+                </div>
+                <p className="text-sm text-gray-300">{provider.description}</p>
+                {provider.supported_regions && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Regions: {Array.isArray(provider.supported_regions) ? provider.supported_regions.join(', ') : provider.supported_regions}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Features Comparison */}
         <div className="bg-gray-700/30 rounded-xl p-6">
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
