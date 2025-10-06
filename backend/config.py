@@ -12,6 +12,7 @@ DB_NAME = os.environ.get('DB_NAME', 'viral_video_analyzer')
 
 # API Keys
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
 # Payment Gateway Configuration
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY')
