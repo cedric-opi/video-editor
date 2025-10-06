@@ -157,8 +157,8 @@ class EnhancedVideoService:
             # Create user message for GPT-5
             user_message = UserMessage(text=analysis_prompt)
             
-            # Get GPT-5 analysis
-            logger.info(f"🧠 Analyzing video with GPT-5 (Duration: {duration}s, Tier: {usage_tier})")
+            # Get GPT-4o analysis for faster performance
+            logger.info(f"🧠 Analyzing video with GPT-4o (Duration: {duration}s, Tier: {usage_tier})")
             response = await self.llm_chat.send_message(user_message)
             
             # Parse GPT-5 response
