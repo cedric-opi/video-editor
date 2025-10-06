@@ -931,8 +931,8 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
         
         await db.video_uploads.insert_one(video_upload.dict())
         
-        # Start background processing
-        background_tasks.add_task(process_video_pipeline, video_id, temp_path, duration)
+        # Start enhanced background processing with user context
+        background_tasks.add_task(process_video_pipeline, video_id, temp_path, duration, user_email)
         
         # Initialize processing status
         await db.processing_status.insert_one({
