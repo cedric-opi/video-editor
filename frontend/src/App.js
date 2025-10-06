@@ -554,9 +554,36 @@ const ViralVideoAnalyzer = () => {
             </div>
           </div>
         </div>
+
+        {/* Premium Modal */}
+        {showPremiumModal && (
+          <PremiumPlans
+            userEmail={userEmail}
+            onClose={() => setShowPremiumModal(false)}
+            onSuccess={() => {
+              setShowPremiumModal(false);
+              if (userEmail) {
+                checkPremiumStatus(userEmail);
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );
 };
 
-export default ViralVideoAnalyzer;
+// Main App with Router
+const App = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<ViralVideoAnalyzer />} />
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/payment-cancel" element={<PaymentCancel />} />
+      </Routes>
+    </BrowserRouter>
+  );
+};
+
+export default App;
