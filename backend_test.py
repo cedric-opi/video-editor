@@ -558,6 +558,89 @@ class ViralVideoAnalyzerTester:
             self.gpt5_test_results['subtitles'] = False
             return False, {}
 
+    def test_direct_video_analyze_endpoint(self):
+        """Test the new /api/video/analyze endpoint with GPT-5"""
+        print(f"\n🔍 Testing Direct /api/video/analyze Endpoint...")
+        
+        # Create test video file
+        test_file = self.create_test_video_file()
+        if not test_file:
+            print("❌ Could not create test video file")
+            return False, {}
+        
+        try:
+            files = {'file': test_file}
+            data = {'user_email': 'direct_analyze_test@example.com'}
+            
+            response = requests.post(
+                f"{self.api_url}/video/analyze",
+                files=files,
+                data=data,
+                timeout=120  # Longer timeout for direct analysis
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                
+                # Check for enhanced GPT-5 fields in response
+                analysis = response_data.get('analysis', {})
+                segments = response_data.get('segments', [])
+                processing_info = response_data.get('processing_info', {})
+                
+                enhanced_features = {
+                    'has_viral_score': analysis.get('viral_score') is not None,
+                    'has_hook_strategy': bool(analysis.get('hook_strategy')),
+                    'has_platform_optimization': bool(analysis.get('platform_optimization')),
+                    'has_viral_prediction': bool(analysis.get('viral_prediction')),
+                    'has_subtitle_strategy': bool(analysis.get('subtitle_strategy')),
+                    'gpt5_enhanced': processing_info.get('gpt5_enhanced', False),
+                    'intelligent_segmentation': processing_info.get('intelligent_segmentation', False),
+                    'max_segments_respected': len(segments) <= 3,
+                    'segments_have_purpose': all(seg.get('purpose') for seg in segments),
+                    'segments_have_viral_scores': all(seg.get('viral_score') for seg in segments)
+                }
+                
+                print(f"✅ Direct Analysis Endpoint Working")
+                print(f"   Video ID: {response_data.get('video_id')}")
+                print(f"   Viral Score: {analysis.get('viral_score')}")
+                print(f"   Content Type: {analysis.get('content_type')}")
+                print(f"   Segments Created: {len(segments)}")
+                print(f"   GPT-5 Enhanced: {'✅' if enhanced_features['gpt5_enhanced'] else '❌'}")
+                print(f"   Hook Strategy: {'✅' if enhanced_features['has_hook_strategy'] else '❌'}")
+                print(f"   Platform Optimization: {'✅' if enhanced_features['has_platform_optimization'] else '❌'}")
+                print(f"   Max 3 Segments Rule: {'✅' if enhanced_features['max_segments_respected'] else '❌'}")
+                
+                enhancement_score = sum(enhanced_features.values()) / len(enhanced_features)
+                
+                if enhancement_score >= 0.8:
+                    print("✅ Direct analyze endpoint working excellently with GPT-5 enhancements")
+                    self.gpt5_test_results['direct_analyze'] = True
+                    return True, response_data
+                elif enhancement_score >= 0.6:
+                    print("⚠️  Direct analyze endpoint working partially")
+                    self.gpt5_test_results['direct_analyze'] = 'partial'
+                    return True, response_data
+                else:
+                    print("❌ Direct analyze endpoint has issues")
+                    self.gpt5_test_results['direct_analyze'] = False
+                    return False, response_data
+                    
+            else:
+                print(f"❌ Direct analyze failed - Status: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"   Error: {error_data}")
+                except:
+                    print(f"   Error: {response.text}")
+                
+                self.gpt5_test_results['direct_analyze'] = False
+                return False, {}
+                
+        except Exception as e:
+            print(f"❌ Direct analyze test failed: {str(e)}")
+            self.gpt5_test_results['direct_analyze'] = False
+            return False, {}
+
     def test_fallback_system(self):
         """Test GPT-5 to GPT-4 fallback system"""
         print(f"\n🔍 Testing GPT-5 to GPT-4 Fallback System...")
