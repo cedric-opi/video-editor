@@ -226,7 +226,7 @@ class VideoService:
         """Create video segments with enhanced AI-guided content"""
         try:
             # Use GPT-4o enhanced segmentation if available
-            if self.use_gpt5 and self.enhanced_service:
+            if self.use_enhanced and self.enhanced_service:
                 logger.info("🎯 Creating intelligent segments with GPT-4o")
                 return await self.enhanced_service.create_intelligent_segments(video_path, analysis_data, video_id)
             
