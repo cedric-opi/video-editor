@@ -8,12 +8,14 @@ import os
 import logging
 import shutil
 import ffmpeg
+import uuid
+from typing import Dict, Any
 from pathlib import Path
 
 # Import organized modules
 from config import CORS_ORIGINS, MAX_FILE_SIZE, PREMIUM_PLANS
 from database import connect_to_mongo, close_mongo_connection, get_database
-from models import VideoUpload, CheckoutRequest
+from models import VideoUpload, CheckoutRequest, ProcessingStatus, ViralAnalysis, VideoSegment
 from services.user_service import UserService  
 from services.payment_service import MomoPayService
 from services.video_service import VideoService
@@ -38,7 +40,16 @@ user_service = UserService()
 video_service = VideoService()
 momo_service = MomoPayService()
 
-# ===== API ENDPOINTS =====
+# Application startup and shutdown events
+@app.on_event("startup")
+async def startup_db_client():
+    await connect_to_mongo()
+
+@app.on_event("shutdown")  
+async def shutdown_db_client():
+    await close_mongo_connection()
+
+# ===== VIDEO PROCESSING ENDPOINTS =====
 
 @api_router.get("/")
 async def root():
@@ -48,625 +59,17 @@ async def root():
         "status": "operational"
     }
 
-# Application startup and shutdown events
-@app.on_event("startup")
-async def startup_db_client():
-    await connect_to_mongo()
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    await close_mongo_connection()
-
-# Helper Functions
-async def analyze_video_content(video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
-    """Advanced AI video analysis for viral content creation"""
-    try:
-        # Check user's usage limits first
-        usage_tier = await check_user_usage_limits(user_email)
-        
-        # Advanced AI analysis prompt for viral video editing
-        analysis_prompt = f"""
-        You are an ABSOLUTE PERFECT VIDEO EDITOR with expertise in creating viral content. Your mission is to edit this {duration:.1f}-second video in the MOST ATTRACTIVE way possible to capture maximum audience attention.
-
-        ANALYZE THIS VIDEO COMPREHENSIVELY:
-        
-        1. **VIRAL POTENTIAL ANALYSIS:**
-        - Identify the most powerful hooks, emotional peaks, and value moments
-        - Find moments that create curiosity gaps or surprise elements
-        - Detect pacing changes, energy shifts, and climactic moments
-        - Spot visual elements that grab attention (movement, colors, expressions)
-        
-        2. **STRATEGIC SEGMENTATION:**
-        - Cut the video into 3-5 meaningful chunks (10-30 seconds each)
-        - Each chunk should have a clear purpose: Hook, Build-up, Climax, Resolution
-        - Ensure each segment can work as a standalone viral clip
-        - Prioritize segments with highest engagement potential
-        
-        3. **CAPTION STRATEGY:**
-        - Create compelling captions that enhance the story
-        - Use curiosity-driven text that makes viewers want to watch
-        - Include emotional triggers and call-to-actions
-        - Make captions that work even with sound off
-        
-        4. **ENGAGEMENT OPTIMIZATION:**
-        - Identify moments for text overlays, arrows, or emphasis
-        - Suggest optimal segment lengths for social media platforms
-        - Find natural transition points that maintain viewer attention
-        
-        Quality Level: {"PREMIUM" if usage_tier == "premium" else "HIGH" if usage_tier == "free_high" else "STANDARD"}
-        
-        Respond in JSON format:
-        {{
-            "viral_score": 0.85,
-            "content_type": "tutorial/entertainment/educational/promotional",
-            "target_audience": "audience description",
-            "viral_techniques": ["specific techniques found"],
-            "engagement_factors": ["emotional triggers", "curiosity elements"],
-            "content_summary": "compelling description",
-            "analysis_text": "detailed viral potential analysis",
-            "optimized_segments": [
-                {{
-                    "segment_id": 1,
-                    "start": 0,
-                    "end": 18,
-                    "duration": 18,
-                    "purpose": "Hook - grab attention instantly",
-                    "viral_score": 0.9,
-                    "caption_text": "🔥 This changes everything...",
-                    "description": "Opening hook with immediate value proposition",
-                    "editing_notes": "Add zoom effect on key moment, emphasize with text",
-                    "best_for_platforms": ["TikTok", "Instagram Reels", "YouTube Shorts"],
-                    "engagement_elements": ["curiosity gap", "visual appeal", "immediate value"]
-                }}
-            ],
-            "editing_recommendations": [
-                "Add dynamic text animations at key moments",
-                "Use quick cuts during high-energy sections",
-                "Include progress indicators for tutorials"
-            ],
-            "caption_strategy": "Use questions and cliffhangers to increase watch time",
-            "optimization_tips": ["Post at peak hours", "Use trending hashtags", "Create series format"]
-        }}
-        """
-        
-        # Use higher quality AI analysis for premium/high-tier users
-        model = "gpt-4" if usage_tier in ["premium", "free_high"] else "gpt-4"
-        max_tokens = 2000 if usage_tier in ["premium", "free_high"] else 1000
-        
-        response = await openai_client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a world-class viral video editor and content strategist. You understand what makes content go viral and can identify the most engaging moments in any video. Your analysis creates content that consistently achieves millions of views."},
-                {"role": "user", "content": analysis_prompt}
-            ],
-            max_tokens=max_tokens,
-            temperature=0.7
-        )
-        
-        # Parse the enhanced JSON response
-        try:
-            analysis_json = json.loads(response.choices[0].message.content.strip())
-            
-            # Ensure we have optimized_segments (fallback to highlight_segments for compatibility)
-            if "optimized_segments" in analysis_json:
-                analysis_json["highlight_segments"] = analysis_json["optimized_segments"]
-            
-            return analysis_json
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse AI response as JSON, using enhanced default analysis")
-            raise ValueError("JSON parsing failed")
-        
-    except Exception as e:
-        logger.error(f"Error in advanced video analysis: {str(e)}")
-        # Enhanced default analysis based on usage tier
-        default_segments = []
-        
-        if usage_tier in ["premium", "free_high"]:
-            # Create more sophisticated default segments
-            num_segments = min(4, int(duration / 15))
-            segment_duration = duration / num_segments if num_segments > 0 else duration
-            
-            for i in range(num_segments):
-                start_time = i * segment_duration
-                end_time = min((i + 1) * segment_duration, duration)
-                
-                default_segments.append({
-                    "segment_id": i + 1,
-                    "start": start_time,
-                    "end": end_time,
-                    "duration": end_time - start_time,
-                    "purpose": f"Viral Segment {i + 1}",
-                    "viral_score": 0.8 - (i * 0.1),
-                    "caption_text": f"🚀 Amazing moment #{i + 1}",
-                    "description": f"High-impact segment showcasing key content",
-                    "engagement_elements": ["visual appeal", "content value"]
-                })
-        else:
-            # Basic segment for standard tier
-            default_segments = [
-                {
-                    "segment_id": 1,
-                    "start": 0,
-                    "end": min(20, duration),
-                    "duration": min(20, duration),
-                    "purpose": "Main highlight",
-                    "viral_score": 0.6,
-                    "caption_text": "Check this out!",
-                    "description": "Main content highlight"
-                }
-            ]
-        
-        return {
-            "viral_score": 0.7,
-            "content_type": "general",
-            "viral_techniques": ["Visual Appeal", "Content Quality"],
-            "engagement_factors": ["Interesting Content", "Good Pacing"],
-            "content_summary": "Video content with viral potential",
-            "analysis_text": "The video shows good potential for viral content with proper editing and optimization.",
-            "optimized_segments": default_segments,
-            "highlight_segments": default_segments,  # Compatibility
-            "editing_recommendations": ["Add engaging captions", "Optimize for mobile viewing"],
-            "quality_tier": usage_tier
-        }
-
-async def create_video_segments(video_path: str, analysis_data: Dict[str, Any], video_id: str) -> List[VideoSegment]:
-    """Create video segments based on AI analysis"""
-    try:
-        segments = []
-        
-        # Get video duration using ffprobe
-        probe = ffmpeg.probe(video_path)
-        video_duration = float(probe['streams'][0]['duration'])
-        
-        # Get highlight segments from analysis
-        highlight_segments = analysis_data.get("highlight_segments", [])
-        
-        # If no specific segments, create default segments (15-30 second chunks)
-        if not highlight_segments:
-            segment_duration = 25  # Default 25-second segments
-            current_time = 0
-            segment_num = 1
-            
-            while current_time < video_duration:
-                end_time = min(current_time + segment_duration, video_duration)
-                
-                if end_time - current_time >= 10:  # Only create segments >= 10 seconds
-                    segments.append(VideoSegment(
-                        video_id=video_id,
-                        segment_number=segment_num,
-                        start_time=current_time,
-                        end_time=end_time,
-                        duration=end_time - current_time,
-                        caption_text=f"Segment {segment_num}",
-                        audio_script=f"This is segment {segment_num} of the viral content.",
-                        highlight_score=0.7
-                    ))
-                    segment_num += 1
-                
-                current_time = end_time
-        else:
-            # Use AI-identified segments
-            for i, segment_data in enumerate(highlight_segments):
-                start_time = segment_data.get("start", 0)
-                end_time = segment_data.get("end", start_time + 15)
-                reason = segment_data.get("reason", f"Highlight segment {i+1}")
-                score = segment_data.get("score", 0.7)
-                
-                if end_time <= video_duration and end_time - start_time >= 5:
-                    segments.append(VideoSegment(
-                        video_id=video_id,
-                        segment_number=i + 1,
-                        start_time=start_time,
-                        end_time=end_time,
-                        duration=end_time - start_time,
-                        caption_text=reason,
-                        audio_script=f"Key highlight: {reason}",
-                        highlight_score=score
-                    ))
-        
-        return segments
-        
-    except Exception as e:
-        logger.error(f"Error creating segments: {str(e)}")
-        return []
-
-async def generate_captions_and_voice(segments: List[VideoSegment], usage_tier: str = "standard") -> List[VideoSegment]:
-    """Generate enhanced AI captions and voice-overs based on usage tier"""
-    try:
-        for segment in segments:
-            
-            if usage_tier in ["premium", "free_high"]:
-                # Premium/High-quality caption generation
-                caption_prompt = f"""
-                Create a VIRAL CAPTION for a {segment.duration:.1f}-second video segment that will maximize engagement and views.
-                
-                Segment Context: {segment.caption_text}
-                Segment Purpose: {getattr(segment, 'purpose', 'engaging content')}
-                
-                VIRAL CAPTION REQUIREMENTS:
-                - Must grab attention in first 3 words
-                - Create curiosity or emotional hook
-                - Include power words: "This", "Secret", "Finally", "Shocking", etc.
-                - Use emojis strategically (2-3 max)
-                - Ask questions or create cliffhangers
-                - Keep under 80 characters for mobile
-                - Make people want to share/comment
-                
-                Examples of viral patterns:
-                - "This changes everything about..."
-                - "Finally! The secret to..."
-                - "You won't believe what happens..."
-                - "This one trick will..."
-                
-                Return only the viral caption, nothing else.
-                """
-                
-                voice_prompt = f"""
-                Write a COMPELLING VOICE-OVER SCRIPT that will keep viewers watching until the end.
-                
-                Segment: {segment.duration:.1f} seconds
-                Context: {segment.caption_text}
-                
-                VOICE-OVER REQUIREMENTS:
-                - Hook viewers in first 2 seconds
-                - Speak at 160-180 words per minute (natural pace)
-                - Use conversational, energetic tone
-                - Create urgency or excitement
-                - Include micro-pauses for emphasis
-                - End with intrigue for next segment
-                - Match {segment.duration:.1f}-second duration exactly
-                
-                Script should be exactly {int(segment.duration * 3)} words (3 words per second average).
-                
-                Return only the voice script, nothing else.
-                """
-                
-                max_tokens = 80
-                temperature = 0.8
-                
-            else:
-                # Standard quality generation
-                caption_prompt = f"""
-                Create an engaging caption for a {segment.duration:.1f}-second video segment.
-                
-                Context: {segment.caption_text}
-                
-                Keep it simple, clear, and under 60 characters.
-                Return only the caption.
-                """
-                
-                voice_prompt = f"""
-                Create a voice script for {segment.duration:.1f} seconds.
-                Context: {segment.caption_text}
-                Keep it natural and conversational.
-                Return only the script.
-                """
-                
-                max_tokens = 40
-                temperature = 0.6
-            
-            try:
-                # Generate caption
-                caption_response = await openai_client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "You are a viral content expert who creates captions that get millions of views. You understand psychology, hooks, and what makes people engage."},
-                        {"role": "user", "content": caption_prompt}
-                    ],
-                    max_tokens=max_tokens,
-                    temperature=temperature
-                )
-                
-                # Generate voice script
-                voice_response = await openai_client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "You are a professional voice-over writer who creates scripts that capture and maintain audience attention for viral content."},
-                        {"role": "user", "content": voice_prompt}
-                    ],
-                    max_tokens=max_tokens * 2,
-                    temperature=temperature
-                )
-                
-                # Update segment with enhanced content
-                segment.caption_text = caption_response.choices[0].message.content.strip()[:100]  # Ensure length limit
-                segment.audio_script = voice_response.choices[0].message.content.strip()
-                
-                # Add quality indicators
-                if usage_tier in ["premium", "free_high"]:
-                    if not segment.caption_text.startswith(('🔥', '✨', '💥', '⚡', '🚀')):
-                        # Add engaging emoji if not present
-                        emojis = ['🔥', '✨', '💥', '⚡', '🚀', '👀', '😱', '🤯']
-                        segment.caption_text = f"{emojis[hash(segment.caption_text) % len(emojis)]} {segment.caption_text}"
-                
-            except Exception as e:
-                logger.error(f"Error generating content for segment {segment.id}: {str(e)}")
-                # Use fallback content
-                segment.caption_text = f"Amazing moment #{segment.segment_number}"
-                segment.audio_script = f"Here's an incredible highlight from this viral content."
-        
-        return segments
-        
-    except Exception as e:
-        logger.error(f"Error in enhanced caption generation: {str(e)}")
-        return segments
-
-async def generate_audio_for_segment(text: str, segment_id: str) -> str:
-    """Generate AI voice-over using OpenAI TTS"""
-    try:
-        response = await openai_client.audio.speech.create(
-            model="tts-1-hd",
-            voice="alloy",
-            input=text,
-            response_format="mp3"
-        )
-        
-        # Save audio file
-        audio_path = f"/tmp/audio_{segment_id}.mp3"
-        with open(audio_path, "wb") as f:
-            f.write(await response.aread())
-        
-        return audio_path
-        
-    except Exception as e:
-        logger.error(f"Error generating audio: {str(e)}")
-        return None
-
-async def create_final_clips(video_path: str, segments: List[VideoSegment], usage_tier: str = "standard") -> List[str]:
-    """Create enhanced video clips with professional captions and editing"""
-    try:
-        final_clips = []
-        
-        for segment in segments:
-            output_path = f"/tmp/segment_{segment.id}.mp4"
-            temp_video_path = f"/tmp/temp_video_{segment.id}.mp4"
-            temp_subtitle_path = f"/tmp/subtitle_{segment.id}.srt"
-            
-            try:
-                logger.info(f"Creating enhanced clip for segment {segment.segment_number}: {segment.start_time}s - {segment.end_time}s")
-                
-                # Step 1: Extract video segment with enhanced quality
-                video_filters = []
-                
-                if usage_tier in ["premium", "free_high"]:
-                    # High quality processing
-                    video_filters.extend([
-                        'scale=1080:1920:force_original_aspect_ratio=decrease',  # Vertical format for social media
-                        'pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black',  # Add black bars if needed
-                        'eq=contrast=1.1:brightness=0.05:saturation=1.2'  # Enhance colors slightly
-                    ])
-                else:
-                    # Standard quality processing  
-                    video_filters.extend([
-                        'scale=720:1280:force_original_aspect_ratio=decrease',  # Lower resolution
-                        'pad=720:1280:(ow-iw)/2:(oh-ih)/2:black'
-                    ])
-                
-                # Create subtitle file with enhanced captions
-                subtitle_content = create_enhanced_subtitle(segment, usage_tier)
-                with open(temp_subtitle_path, 'w', encoding='utf-8') as f:
-                    f.write(subtitle_content)
-                
-                # Step 2: Extract base video
-                (
-                    ffmpeg
-                    .input(video_path, ss=segment.start_time, t=segment.duration)
-                    .filter('fps', fps=30 if usage_tier in ["premium", "free_high"] else 24)
-                    .output(temp_video_path, vcodec='libx264', acodec='aac', preset='medium')
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
-                
-                # Step 3: Add captions with styling based on tier
-                if usage_tier in ["premium", "free_high"]:
-                    # Premium captions with advanced styling
-                    caption_filter = f"subtitles={temp_subtitle_path}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,SecondaryColour=&H000000FF,BackColour=&H80000000,Bold=1,Outline=2,Shadow=3,MarginV=50'"
-                else:
-                    # Basic captions
-                    caption_filter = f"subtitles={temp_subtitle_path}:force_style='FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,Bold=1,Outline=1,MarginV=40'"
-                
-                # Step 4: Create final video with captions and enhancements
-                input_video = ffmpeg.input(temp_video_path)
-                
-                if usage_tier in ["premium", "free_high"]:
-                    # Premium processing with captions and effects
-                    video = input_video.filter('subtitles', temp_subtitle_path, 
-                                             force_style='FontName=Arial,FontSize=28,PrimaryColour=&H00FFFFFF,SecondaryColour=&H000000FF,BackColour=&H80000000,Bold=1,Outline=2,Shadow=3,MarginV=60')
-                    
-                    # Add fade in/out for premium
-                    video = video.filter('fade', type='in', duration=0.5).filter('fade', type='out', start_time=segment.duration-0.5, duration=0.5)
-                else:
-                    # Standard processing with basic captions
-                    video = input_video.filter('subtitles', temp_subtitle_path,
-                                             force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,Bold=1,Outline=1,MarginV=50')
-                
-                # Output final video
-                (
-                    video
-                    .output(output_path, 
-                           vcodec='libx264', 
-                           acodec='aac',
-                           crf=18 if usage_tier in ["premium", "free_high"] else 23,  # Higher quality for premium
-                           preset='medium' if usage_tier in ["premium", "free_high"] else 'fast')
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
-                
-                # Verify the file was created
-                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                    final_clips.append(output_path)
-                    logger.info(f"Successfully created enhanced segment: {output_path} ({usage_tier} quality)")
-                else:
-                    logger.error(f"Enhanced segment file not created: {output_path}")
-                
-                # Cleanup temporary files
-                for temp_file in [temp_video_path, temp_subtitle_path]:
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
-                
-            except ffmpeg.Error as e:
-                logger.error(f"FFmpeg error creating enhanced segment {segment.id}: {str(e)}")
-                continue
-            except Exception as e:
-                logger.error(f"Error creating enhanced segment {segment.id}: {str(e)}")
-                continue
-        
-        logger.info(f"Created {len(final_clips)} enhanced clips out of {len(segments)} segments using {usage_tier} tier")
-        return final_clips
-        
-    except Exception as e:
-        logger.error(f"Error creating enhanced final clips: {str(e)}")
-        return []
-
-def create_enhanced_subtitle(segment: VideoSegment, usage_tier: str) -> str:
-    """Create subtitle file with enhanced captions"""
-    
-    # Split caption into multiple lines if it's long
-    caption_text = segment.caption_text
-    words = caption_text.split()
-    
-    if usage_tier in ["premium", "free_high"]:
-        # Premium: Multi-line captions with timing
-        lines = []
-        current_line = []
-        
-        for word in words:
-            current_line.append(word)
-            if len(' '.join(current_line)) > 25:  # Line length limit
-                lines.append(' '.join(current_line))
-                current_line = []
-        
-        if current_line:
-            lines.append(' '.join(current_line))
-        
-        # Create multiple subtitle entries for dynamic display
-        subtitle_content = "1\n"
-        subtitle_content += "00:00:00,000 --> 00:00:03,000\n"
-        subtitle_content += lines[0] + "\n\n"
-        
-        if len(lines) > 1:
-            subtitle_content += "2\n"
-            subtitle_content += f"00:00:03,000 --> {format_time(segment.duration)}\n"
-            subtitle_content += lines[1] + "\n\n"
-    else:
-        # Standard: Simple single caption
-        subtitle_content = "1\n"
-        subtitle_content += f"00:00:00,000 --> {format_time(segment.duration)}\n"
-        subtitle_content += caption_text[:50] + "..." if len(caption_text) > 50 else caption_text
-        subtitle_content += "\n\n"
-    
-    return subtitle_content
-
-def format_time(seconds: float) -> str:
-    """Format seconds to SRT timestamp format"""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    millisecs = int((seconds % 1) * 1000)
-    
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millisecs:03d}"
-
-# Enhanced background task for video processing
-async def process_video_pipeline(video_id: str, video_path: str, duration: float, user_email: str = None):
-    """Enhanced video processing pipeline with AI-powered editing"""
-    try:
-        # Get user's usage tier
-        usage_tier = await check_user_usage_limits(user_email)
-        
-        # Update usage count
-        if user_email:
-            await update_user_usage_count(user_email, video_id)
-        
-        # Update status
-        await db.processing_status.update_one(
-            {"video_id": video_id},
-            {"$set": {"status": "analyzing", "progress": 15, "message": f"🤖 AI analyzing video for viral potential ({usage_tier} quality)..."}},
-            upsert=True
-        )
-        
-        # Step 1: Advanced AI Analysis
-        analysis_data = await analyze_video_content(video_path, duration, user_email)
-        
-        # Save enhanced analysis
-        analysis = ViralAnalysis(
-            video_id=video_id,
-            analysis_text=analysis_data.get("analysis_text", ""),
-            viral_techniques=analysis_data.get("viral_techniques", []),
-            engagement_factors=analysis_data.get("engagement_factors", []),
-            content_summary=analysis_data.get("content_summary", "")
-        )
-        await db.viral_analysis.insert_one(analysis.dict())
-        
-        # Update status
-        await db.processing_status.update_one(
-            {"video_id": video_id},
-            {"$set": {"status": "segmenting", "progress": 35, "message": "✂️ Creating optimized viral segments..."}}
-        )
-        
-        # Step 2: Create enhanced segments
-        segments = await create_video_segments(video_path, analysis_data, video_id)
-        
-        # Update status
-        await db.processing_status.update_one(
-            {"video_id": video_id},
-            {"$set": {"status": "generating", "progress": 60, "message": "📝 Generating viral captions and scripts..."}}
-        )
-        
-        # Step 3: Generate enhanced captions and voice
-        segments = await generate_captions_and_voice(segments, usage_tier)
-        
-        # Save segments to database with usage tier info
-        for segment in segments:
-            segment_dict = segment.dict()
-            segment_dict["usage_tier"] = usage_tier
-            segment_dict["quality_level"] = "High" if usage_tier in ["premium", "free_high"] else "Standard"
-            await db.video_segments.insert_one(segment_dict)
-        
-        # Update status
-        await db.processing_status.update_one(
-            {"video_id": video_id},
-            {"$set": {"status": "finalizing", "progress": 85, "message": "🎬 Creating final viral-ready clips with captions..."}}
-        )
-        
-        # Step 4: Create enhanced final clips
-        final_clips = await create_final_clips(video_path, segments, usage_tier)
-        
-        # Determine completion message based on usage tier
-        if usage_tier == "premium":
-            completion_msg = "🎉 Premium quality viral clips created! Unlimited processing available."
-        elif usage_tier == "free_high":
-            remaining = await get_user_usage_status(user_email)
-            completion_msg = f"✨ High quality clips created! {remaining.get('remaining_high_quality', 0)} high-quality edits remaining."
-        else:
-            completion_msg = "✅ Standard clips created. Upgrade to Premium for high-quality viral editing!"
-        
-        # Update final status
-        await db.processing_status.update_one(
-            {"video_id": video_id},
-            {"$set": {"status": "completed", "progress": 100, "message": completion_msg}}
-        )
-        
-        logger.info(f"Enhanced video processing completed for {video_id} with {usage_tier} tier")
-        
-    except Exception as e:
-        logger.error(f"Error in enhanced video processing pipeline: {str(e)}")
-        await db.processing_status.update_one(
-            {"video_id": video_id},
-            {"$set": {"status": "error", "progress": 0, "message": f"Processing failed: {str(e)}", "error": str(e)}}
-        )
-
-# API Routes
-@api_router.get("/")
-async def root():
-    return {"message": "Viral Video Analyzer API"}
-
 @api_router.post("/upload-video")
 async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = File(...), user_email: str = None):
-    """Upload video for processing"""
+    """Upload video for advanced AI processing"""
     try:
         # Validate file
         if not file.content_type.startswith('video/'):
             raise HTTPException(status_code=400, detail="File must be a video")
+        
+        # Check file size
+        if hasattr(file, 'size') and file.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large. Maximum 500MB allowed")
         
         # Create video record
         video_id = str(uuid.uuid4())
@@ -676,15 +79,15 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Get video duration
+        # Get video duration and validate
         try:
             probe = ffmpeg.probe(temp_path)
             duration = float(probe['streams'][0]['duration'])
             file_size = os.path.getsize(temp_path)
             
-            # Check premium status and video length limits
+            # Check premium status and duration limits
             if user_email:
-                premium_status = await check_user_premium_status(user_email)
+                premium_status = await user_service.check_user_premium_status(user_email)
                 max_duration = premium_status["max_video_duration"]
                 
                 if duration > max_duration:
@@ -700,7 +103,7 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
                             detail=f"Video too long. Maximum 5 minutes for free plan. Upgrade to premium for longer videos (up to 30 minutes)."
                         )
             else:
-                # No user email provided, use free plan limits
+                # No user email, use free plan limits
                 if duration > 300:  # 5 minutes
                     os.remove(temp_path)
                     raise HTTPException(
@@ -714,33 +117,36 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
             os.remove(temp_path)
             raise HTTPException(status_code=400, detail="Invalid video file")
         
-        # Create video record
+        # Create video upload record
         video_upload = VideoUpload(
             id=video_id,
             filename=temp_path,
             original_filename=file.filename,
             file_size=file_size,
-            duration=duration
+            duration=duration,
+            user_email=user_email
         )
         
+        db = await get_database()
         await db.video_uploads.insert_one(video_upload.dict())
         
-        # Start enhanced background processing with user context
+        # Start enhanced background processing
         background_tasks.add_task(process_video_pipeline, video_id, temp_path, duration, user_email)
         
         # Initialize processing status
-        await db.processing_status.insert_one({
-            "video_id": video_id,
-            "status": "processing",
-            "progress": 10,
-            "message": "Video uploaded successfully. Processing started..."
-        })
+        await db.processing_status.insert_one(ProcessingStatus(
+            video_id=video_id,
+            status="processing",
+            progress=10,
+            message="🚀 Video uploaded! Starting AI-powered viral analysis..."
+        ).dict())
         
         return {
             "video_id": video_id,
             "message": "Video uploaded successfully",
             "duration": duration,
-            "status": "processing"
+            "status": "processing",
+            "estimated_completion": "2-3 minutes"
         }
         
     except HTTPException:
@@ -749,20 +155,124 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
         logger.error(f"Upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+async def process_video_pipeline(video_id: str, video_path: str, duration: float, user_email: str = None):
+    """Enhanced video processing pipeline with professional AI editing"""
+    try:
+        db = await get_database()
+        
+        # Get usage tier and update count
+        usage_tier = await user_service.check_user_usage_limits(user_email)
+        if user_email:
+            await user_service.update_user_usage_count(user_email, video_id)
+        
+        # Step 1: Advanced AI Analysis
+        await db.processing_status.update_one(
+            {"video_id": video_id},
+            {"$set": {"status": "analyzing", "progress": 25, "message": f"🤖 AI analyzing video content ({usage_tier} quality)..."}}
+        )
+        
+        analysis_data = await video_service.analyze_video_content(video_path, duration, user_email)
+        
+        # Save analysis
+        analysis = ViralAnalysis(
+            video_id=video_id,
+            analysis_text=analysis_data.get("analysis_text", ""),
+            viral_techniques=analysis_data.get("viral_techniques", []),
+            engagement_factors=analysis_data.get("engagement_factors", []),
+            content_summary=analysis_data.get("content_summary", ""),
+            viral_score=analysis_data.get("viral_score", 0.0),
+            content_type=analysis_data.get("content_type", ""),
+            editing_recommendations=analysis_data.get("editing_recommendations", [])
+        )
+        await db.viral_analysis.insert_one(analysis.dict())
+        
+        # Step 2: Create optimized segments  
+        await db.processing_status.update_one(
+            {"video_id": video_id},
+            {"$set": {"status": "segmenting", "progress": 45, "message": "✂️ Creating viral-optimized segments (max 3 for long videos)..."}}
+        )
+        
+        segments = await video_service.create_video_segments(video_path, analysis_data, video_id)
+        
+        # Step 3: Generate professional captions
+        await db.processing_status.update_one(
+            {"video_id": video_id},
+            {"$set": {"status": "generating", "progress": 65, "message": "📝 Generating viral captions with embedded subtitles..."}}
+        )
+        
+        segments = await generate_enhanced_captions(segments, usage_tier)
+        
+        # Save segments with quality tier
+        for segment in segments:
+            segment_dict = segment.dict()
+            segment_dict["quality_tier"] = usage_tier
+            await db.video_segments.insert_one(segment_dict)
+        
+        # Step 4: Create professional clips with embedded subtitles
+        await db.processing_status.update_one(
+            {"video_id": video_id},
+            {"$set": {"status": "finalizing", "progress": 85, "message": "🎬 Creating professional clips with embedded subtitles..."}}
+        )
+        
+        final_clips = await video_service.create_professional_clips(video_path, segments, usage_tier)
+        
+        # Completion message based on tier
+        if usage_tier == "premium":
+            message = "🎉 Premium quality viral clips ready! Unlimited processing."
+        elif usage_tier == "free_high":
+            remaining = await user_service.get_user_usage_status(user_email)
+            message = f"✨ High-quality clips ready! {remaining.get('remaining_high_quality', 0)} premium edits left."
+        else:
+            message = "✅ Standard clips ready. Upgrade for premium viral editing!"
+        
+        await db.processing_status.update_one(
+            {"video_id": video_id},
+            {"$set": {"status": "completed", "progress": 100, "message": message}}
+        )
+        
+        logger.info(f"🎬 Professional video processing completed: {video_id} ({usage_tier} tier)")
+        
+    except Exception as e:
+        logger.error(f"Processing pipeline error: {str(e)}")
+        db = await get_database()
+        await db.processing_status.update_one(
+            {"video_id": video_id},
+            {"$set": {"status": "error", "progress": 0, "message": f"Processing failed: {str(e)}"}}
+        )
+
+async def generate_enhanced_captions(segments: list, usage_tier: str):
+    """Generate enhanced captions using VideoService"""
+    try:
+        for segment in segments:
+            if usage_tier in ["premium", "free_high"]:
+                # Premium caption generation
+                if not segment.caption_text.startswith(('🔥', '✨', '💥', '⚡', '🚀')):
+                    emojis = ['🔥', '✨', '💥', '⚡', '🚀', '👀', '😱', '🤯']
+                    emoji = emojis[hash(segment.caption_text) % len(emojis)]
+                    segment.caption_text = f"{emoji} {segment.caption_text}"
+        
+        return segments
+    except Exception as e:
+        logger.error(f"Caption generation error: {str(e)}")
+        return segments
+
+# ===== STATUS AND INFO ENDPOINTS =====
+
 @api_router.get("/processing-status/{video_id}")
 async def get_processing_status(video_id: str):
     """Get video processing status"""
+    db = await get_database()
     status = await db.processing_status.find_one({"video_id": video_id})
     if not status:
         raise HTTPException(status_code=404, detail="Video not found")
     
-    # Remove MongoDB _id field
     status.pop('_id', None)
     return status
 
 @api_router.get("/video-analysis/{video_id}")
 async def get_video_analysis(video_id: str):
     """Get AI analysis results"""
+    db = await get_database()
     analysis = await db.viral_analysis.find_one({"video_id": video_id})
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
@@ -772,19 +282,35 @@ async def get_video_analysis(video_id: str):
 
 @api_router.get("/video-segments/{video_id}")
 async def get_video_segments(video_id: str):
-    """Get video segments"""
+    """Get video segments with quality info"""
+    db = await get_database()
     segments = await db.video_segments.find({"video_id": video_id}).to_list(length=None)
     
-    # Remove MongoDB _id fields
     for segment in segments:
         segment.pop('_id', None)
     
     return {"segments": segments}
 
+@api_router.get("/video-list")
+async def get_video_list():
+    """Get list of processed videos"""
+    db = await get_database()
+    videos = await db.video_uploads.find().to_list(length=None)
+    
+    for video in videos:
+        video.pop('_id', None)
+        # Get processing status
+        status = await db.processing_status.find_one({"video_id": video['id']})
+        video['processing_status'] = status.get('status', 'unknown') if status else 'unknown'
+    
+    return {"videos": videos}
+
 @api_router.get("/download-segment/{video_id}/{segment_number}")
 async def download_segment(video_id: str, segment_number: int):
     """Download processed video segment"""
     try:
+        db = await get_database()
+        
         # Find segment
         segment = await db.video_segments.find_one({
             "video_id": video_id,
@@ -794,56 +320,28 @@ async def download_segment(video_id: str, segment_number: int):
         if not segment:
             raise HTTPException(status_code=404, detail="Segment not found")
         
-        # Look for the processed file
         segment_file = f"/tmp/segment_{segment['id']}.mp4"
         
-        logger.info(f"Looking for segment file: {segment_file}")
-        
+        # Create on-demand if not exists
         if not os.path.exists(segment_file):
-            # If processed file doesn't exist, create it on-demand
-            logger.info(f"Segment file not found, creating on-demand for segment {segment['id']}")
-            
-            # Find original video
             video = await db.video_uploads.find_one({"id": video_id})
-            if not video:
-                raise HTTPException(status_code=404, detail="Original video not found")
-            
-            original_video_path = video['filename']
-            if not os.path.exists(original_video_path):
-                raise HTTPException(status_code=404, detail="Original video file not found")
+            if not video or not os.path.exists(video['filename']):
+                raise HTTPException(status_code=404, detail="Source video not found")
             
             # Create segment on-demand
             try:
-                start_time = segment['start_time']
-                duration = segment['duration']
-                
-                logger.info(f"Creating segment: {start_time}s for {duration}s")
-                
                 (
                     ffmpeg
-                    .input(original_video_path, ss=start_time, t=duration)
-                    .output(
-                        segment_file, 
-                        vcodec='libx264', 
-                        acodec='aac',
-                        **{'preset': 'fast'}
-                    )
+                    .input(video['filename'], ss=segment['start_time'], t=segment['duration'])
+                    .output(segment_file, vcodec='libx264', acodec='aac', preset='fast')
                     .overwrite_output()
                     .run(quiet=True)
                 )
-                
-                if not os.path.exists(segment_file):
-                    raise HTTPException(status_code=500, detail="Failed to create segment file")
-                    
-            except ffmpeg.Error as e:
-                logger.error(f"FFmpeg error creating segment: {str(e)}")
-                raise HTTPException(status_code=500, detail="Failed to process video segment")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail="Failed to create segment")
         
-        # Verify file exists and has content
         if not os.path.exists(segment_file) or os.path.getsize(segment_file) == 0:
-            raise HTTPException(status_code=404, detail="Segment file is empty or missing")
-        
-        logger.info(f"Serving segment file: {segment_file} (size: {os.path.getsize(segment_file)} bytes)")
+            raise HTTPException(status_code=404, detail="Segment file unavailable")
         
         return FileResponse(
             segment_file,
@@ -857,148 +355,188 @@ async def download_segment(video_id: str, segment_number: int):
         logger.error(f"Download error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
-@api_router.get("/video-list")
-async def get_video_list():
-    """Get list of all processed videos"""
-    videos = await db.video_uploads.find().to_list(length=None)
-    
-    for video in videos:
-        video.pop('_id', None)
-        # Get processing status
-        status = await db.processing_status.find_one({"video_id": video['id']})
-        video['processing_status'] = status.get('status', 'unknown') if status else 'unknown'
-    
-    return {"videos": videos}
+# ===== USER AND PAYMENT ENDPOINTS =====
 
-@api_router.get("/debug-files/{video_id}")
-async def debug_files(video_id: str):
-    """Debug endpoint to check what files exist for a video"""
-    try:
-        # Check original video
-        video = await db.video_uploads.find_one({"id": video_id})
-        original_file = video['filename'] if video else None
-        original_exists = os.path.exists(original_file) if original_file else False
-        
-        # Check segments
-        segments = await db.video_segments.find({"video_id": video_id}).to_list(length=None)
-        segment_files = []
-        
-        for segment in segments:
-            segment_file = f"/tmp/segment_{segment['id']}.mp4"
-            segment_files.append({
-                "segment_id": segment['id'],
-                "segment_number": segment['segment_number'],
-                "file_path": segment_file,
-                "exists": os.path.exists(segment_file),
-                "size": os.path.getsize(segment_file) if os.path.exists(segment_file) else 0
-            })
-        
-        return {
-            "video_id": video_id,
-            "original_file": {
-                "path": original_file,
-                "exists": original_exists,
-                "size": os.path.getsize(original_file) if original_exists else 0
-            },
-            "segments": segment_files,
-            "tmp_files": [f for f in os.listdir("/tmp") if video_id in f]
+@api_router.get("/premium-plans")
+async def get_premium_plans():
+    """Get available premium plans with multiple currencies"""
+    return {"plans": PREMIUM_PLANS}
+
+@api_router.get("/payment-providers")
+async def get_payment_providers(region: str = None):
+    """Get available payment providers for region including MomoPay"""
+    
+    # Regional payment provider preferences
+    regional_preferences = {
+        "VN": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
+        "TH": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL, PaymentProvider.STRIPE],
+        "LA": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL],
+        "KH": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL],
+        "MM": [PaymentProvider.MOMOPAY, PaymentProvider.PAYPAL],
+        "US": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL],
+        "CA": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL],
+        "GB": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL],
+        "EU": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL],
+        "default": [PaymentProvider.STRIPE, PaymentProvider.PAYPAL, PaymentProvider.MOMOPAY]
+    }
+    
+    provider_info = {
+        PaymentProvider.STRIPE: {
+            "name": "Credit Card (Stripe)",
+            "description": "Pay with Visa, Mastercard, American Express",
+            "supported_regions": ["US", "CA", "GB", "EU", "AU"],
+            "currencies": ["USD", "EUR", "GBP", "CAD", "AUD"]
+        },
+        PaymentProvider.PAYPAL: {
+            "name": "PayPal",
+            "description": "Pay with PayPal account or credit card",
+            "supported_regions": ["Global"],
+            "currencies": ["USD", "EUR", "GBP", "CAD", "AUD", "JPY"]
+        },
+        PaymentProvider.MOMOPAY: {
+            "name": "MomoPay",
+            "description": "ATM Cards, Credit Cards, MoMo Wallet (Vietnam)",
+            "supported_regions": ["VN", "TH", "LA", "KH", "MM"],
+            "currencies": ["VND", "USD"]
         }
-        
-    except Exception as e:
-        logger.error(f"Debug error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+    }
+    
+    available_providers = regional_preferences.get(region, regional_preferences["default"])
+    
+    return {
+        "available_providers": [
+            {"provider": provider.value, **provider_info.get(provider, {})}
+            for provider in available_providers
+        ],
+        "recommended": available_providers[0].value if available_providers else "stripe"
+    }
 
-@api_router.post("/create-test-video/{video_id}")
-async def create_test_video(video_id: str):
-    """Create a test video for development purposes"""
+@api_router.post("/premium-status")
+async def check_premium_status(request: Dict[str, str]):
+    """Check user premium status"""
+    user_email = request.get("user_email")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email is required")
+    
+    status = await user_service.check_user_premium_status(user_email)
+    return status
+
+@api_router.post("/usage-status")
+async def get_usage_status(request: Dict[str, str]):
+    """Get user usage status including quality limits"""
+    user_email = request.get("user_email")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email is required")
+    
+    status = await user_service.get_user_usage_status(user_email)
+    return status
+
+@api_router.post("/create-checkout")
+async def create_checkout_session(request: CheckoutRequest):
+    """Create payment checkout with MomoPay support"""
     try:
-        # Create a simple test video using ffmpeg
-        test_video_path = f"/tmp/upload_{video_id}.mp4"
+        if request.plan_type not in PREMIUM_PLANS:
+            raise HTTPException(status_code=400, detail="Invalid plan type")
         
-        # Create a 30-second test video with color bars
-        (
-            ffmpeg
-            .input('color=c=blue:size=640x480:d=30', f='lavfi')
-            .output(test_video_path, vcodec='libx264', pix_fmt='yuv420p')
-            .overwrite_output()
-            .run(quiet=True)
-        )
+        plan = PREMIUM_PLANS[request.plan_type]
         
-        if not os.path.exists(test_video_path):
-            raise HTTPException(status_code=500, detail="Failed to create test video")
-        
-        # Create video record
-        video_upload = VideoUpload(
-            id=video_id,
-            filename=test_video_path,
-            original_filename="test_video.mp4",
-            file_size=os.path.getsize(test_video_path),
-            duration=30.0,
-            status="completed"
-        )
-        
-        await db.video_uploads.insert_one(video_upload.dict())
-        
-        # Create test segments
-        segments = [
-            VideoSegment(
-                video_id=video_id,
-                segment_number=1,
-                start_time=0.0,
-                end_time=15.0,
-                duration=15.0,
-                caption_text="🔥 Amazing viral technique #1",
-                audio_script="This is the first amazing highlight from your viral content.",
-                highlight_score=0.9
-            ),
-            VideoSegment(
-                video_id=video_id,
-                segment_number=2,
-                start_time=15.0,
-                end_time=30.0,
-                duration=15.0,
-                caption_text="💯 Epic moment that hooks viewers",
-                audio_script="Here's the second epic moment that will keep viewers engaged.",
-                highlight_score=0.8
+        # Handle MomoPay specifically
+        if request.payment_provider == "momopay":
+            # Determine currency and amount
+            if request.currency and request.currency.upper() == "VND":
+                amount = plan["price_vnd"]
+                currency = "VND"
+            else:
+                amount = plan["price_usd"] 
+                currency = "USD"
+            
+            # Create success/cancel URLs
+            success_url = f"{request.origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&provider=momopay"
+            cancel_url = f"{request.origin_url}/payment-cancel"
+            
+            # Create MomoPay payment
+            result = await momo_service.create_payment(
+                user_email=request.user_email,
+                plan_type=request.plan_type,
+                amount=amount,
+                currency=currency,
+                success_url=success_url,
+                cancel_url=cancel_url
             )
-        ]
+            
+            if result["success"]:
+                return {
+                    "provider": "momopay",
+                    "checkout_url": result["checkout_url"],
+                    "session_id": result["session_id"],
+                    "order_id": result["order_id"],
+                    "amount_vnd": result.get("amount_vnd"),
+                    "amount_usd": result.get("amount_usd"),
+                    "qr_code_url": result.get("qr_code_url"),
+                    "deep_link": result.get("deep_link")
+                }
+            else:
+                raise HTTPException(status_code=500, detail=result["error"])
         
-        for segment in segments:
-            await db.video_segments.insert_one(segment.dict())
+        else:
+            # Handle other payment providers (Stripe, PayPal)
+            payment_manager = PaymentGatewayManager(request.origin_url)
+            
+            provider = PaymentProvider(request.payment_provider) if request.payment_provider else None
+            
+            payment_request = PaymentRequest(
+                amount=plan["price_usd"],
+                currency="USD",
+                user_email=request.user_email,
+                plan_type=request.plan_type,
+                success_url=f"{request.origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&provider={{PROVIDER}}",
+                cancel_url=f"{request.origin_url}/payment-cancel"
+            )
+            
+            response = await payment_manager.create_payment(payment_request, provider, request.user_region)
+            
+            if response.status.value == "failed":
+                raise HTTPException(status_code=500, detail=response.error)
+            
+            return {
+                "provider": response.provider.value,
+                "checkout_url": response.checkout_url,
+                "session_id": response.session_id,
+                "order_id": response.order_id
+            }
         
-        # Create test analysis
-        analysis = ViralAnalysis(
-            video_id=video_id,
-            analysis_text="This test video demonstrates strong viral potential with clear visual appeal and engaging pacing.",
-            viral_techniques=["Strong Opening", "Visual Appeal", "Clear Pacing", "Engaging Content"],
-            engagement_factors=["Visual Impact", "Color Psychology", "Consistent Branding", "Hook Strategy"],
-            content_summary="Test video with solid color background demonstrating basic viral video principles."
-        )
-        
-        await db.viral_analysis.insert_one(analysis.dict())
-        
-        # Set processing status to completed
-        await db.processing_status.update_one(
-            {"video_id": video_id},
-            {"$set": {"status": "completed", "progress": 100, "message": "Test video created successfully!"}},
-            upsert=True
-        )
-        
-        return {
-            "message": "Test video created successfully",
-            "video_id": video_id,
-            "file_path": test_video_path,
-            "segments_created": len(segments)
-        }
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Test video creation error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Test video creation failed: {str(e)}")
+        logger.error(f"Checkout creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Checkout failed: {str(e)}")
+
+@api_router.post("/webhook/momopay")
+async def momo_webhook(request: Request):
+    """Handle MomoPay webhooks"""
+    try:
+        body = await request.body()
+        payload = await request.json()
+        
+        result = await momo_service.handle_webhook(payload)
+        
+        if result["success"]:
+            logger.info(f"MomoPay webhook processed: {result}")
+            return {"status": "success"}
+        else:
+            logger.error(f"MomoPay webhook failed: {result}")
+            raise HTTPException(status_code=400, detail="Webhook processing failed")
+            
+    except Exception as e:
+        logger.error(f"MomoPay webhook error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @api_router.delete("/video/{video_id}")
 async def delete_video(video_id: str):
-    """Delete video and all associated data"""
+    """Delete video and associated data"""
     try:
+        db = await get_database()
+        
         # Delete from database
         await db.video_uploads.delete_one({"id": video_id})
         await db.viral_analysis.delete_one({"video_id": video_id})
@@ -1023,341 +561,13 @@ async def delete_video(video_id: str):
         logger.error(f"Delete error: {str(e)}")
         raise HTTPException(status_code=500, detail="Delete failed")
 
-# Premium Plan and Payment Endpoints
-
-@api_router.get("/premium-plans")
-async def get_premium_plans():
-    """Get available premium plans"""
-    return {"plans": PREMIUM_PLANS}
-
-@api_router.get("/payment-providers")
-async def get_payment_providers(region: str = None):
-    """Get available payment providers for region"""
-    payment_manager = get_payment_manager("https://captivator.preview.emergentagent.com/")
-    available_providers = payment_manager.get_available_providers(region)
-    
-    provider_info = {
-        PaymentProvider.STRIPE: {
-            "name": "Credit Card (Stripe)",
-            "description": "Pay with Visa, Mastercard, American Express",
-            "supported_regions": ["US", "CA", "GB", "EU", "AU"],
-            "currencies": ["USD", "EUR", "GBP", "CAD", "AUD"]
-        },
-        PaymentProvider.PAYPAL: {
-            "name": "PayPal",
-            "description": "Pay with PayPal account or credit card",
-            "supported_regions": ["Global"],
-            "currencies": ["USD", "EUR", "GBP", "CAD", "AUD", "JPY"]
-        },
-        PaymentProvider.MOMOPAY: {
-            "name": "MomoPay",
-            "description": "ATM Cards, Credit Cards, MoMo Wallet (Vietnam)",
-            "supported_regions": ["VN", "TH", "LA", "KH", "MM"],
-            "currencies": ["VND", "USD"]
-        }
-    }
-    
-    return {
-        "available_providers": [
-            {
-                "provider": provider.value,
-                **provider_info.get(provider, {})
-            }
-            for provider in available_providers
-        ],
-        "recommended": available_providers[0].value if available_providers else "stripe"
-    }
-
-@api_router.post("/premium-status")
-async def check_premium_status(request: Dict[str, str]):
-    """Check user premium status"""
-    user_email = request.get("user_email")
-    if not user_email:
-        raise HTTPException(status_code=400, detail="User email is required")
-    
-    status = await check_user_premium_status(user_email)
-    return status
-
-@api_router.post("/usage-status")
-async def get_usage_status(request: Dict[str, str]):
-    """Get detailed user usage status including quality limits"""
-    user_email = request.get("user_email")
-    if not user_email:
-        raise HTTPException(status_code=400, detail="User email is required")
-    
-    status = await get_user_usage_status(user_email)
-    return status
-
-@api_router.post("/create-checkout")
-async def create_checkout_session(request: CheckoutRequest):
-    """Create checkout session for premium plan using multi-gateway system"""
-    try:
-        # Validate plan type
-        if request.plan_type not in PREMIUM_PLANS:
-            raise HTTPException(status_code=400, detail="Invalid plan type")
-        
-        # Get plan details
-        plan = PREMIUM_PLANS[request.plan_type]
-        amount = plan["price"]
-        
-        # Initialize payment manager
-        payment_manager = get_payment_manager(request.origin_url)
-        
-        # Determine payment provider
-        provider = None
-        if request.payment_provider:
-            try:
-                provider = PaymentProvider(request.payment_provider)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid payment provider")
-        
-        # Create success and cancel URLs
-        success_url = f"{request.origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&provider={{PROVIDER}}"
-        cancel_url = f"{request.origin_url}/payment-cancel"
-        
-        # Create payment request
-        payment_request = PaymentRequest(
-            amount=amount,
-            currency="usd",
-            user_email=request.user_email,
-            plan_type=request.plan_type,
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={
-                "plan_name": plan["name"],
-                "plan_description": plan["description"],
-                "source": "viral_video_analyzer"
-            }
-        )
-        
-        # Create checkout session
-        payment_response = await payment_manager.create_payment(
-            payment_request, 
-            provider=provider,
-            region=request.user_region
-        )
-        
-        if payment_response.status == PaymentStatus.FAILED:
-            raise HTTPException(status_code=500, detail=f"Payment creation failed: {payment_response.error}")
-        
-        # Save payment transaction
-        transaction = PaymentTransaction(
-            user_email=request.user_email,
-            amount=amount,
-            currency="usd",
-            plan_type=request.plan_type,
-            stripe_session_id=payment_response.session_id or payment_response.order_id,
-            payment_status="pending",
-            status="initiated",
-            metadata={
-                "plan_name": plan["name"],
-                "plan_description": plan["description"],
-                "payment_provider": payment_response.provider.value,
-                "raw_response": payment_response.raw_response
-            }
-        )
-        
-        await db.payment_transactions.insert_one(transaction.dict())
-        
-        logger.info(f"Created {payment_response.provider.value} checkout for user {request.user_email}, plan {request.plan_type}")
-        
-        response_data = {
-            "provider": payment_response.provider.value,
-            "session_id": payment_response.session_id,
-            "order_id": payment_response.order_id,
-            "status": payment_response.status.value
-        }
-        
-        # Add checkout URL for Stripe/PayPal, or order details for Razorpay
-        if payment_response.checkout_url:
-            response_data["checkout_url"] = payment_response.checkout_url
-        else:
-            # For Razorpay, return order details for frontend handling
-            response_data["order_details"] = payment_response.raw_response
-        
-        return response_data
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating checkout session: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
-
-@api_router.get("/payment-status/{session_id}")
-async def get_payment_status(session_id: str, provider: str = None):
-    """Get payment status for checkout session from any provider"""
-    try:
-        # Find transaction
-        transaction = await db.payment_transactions.find_one({"stripe_session_id": session_id})
-        if not transaction:
-            raise HTTPException(status_code=404, detail="Payment session not found")
-        
-        # Get provider from transaction metadata if not specified
-        if not provider:
-            provider = transaction.get("metadata", {}).get("payment_provider", "stripe")
-        
-        # If already processed, return cached status
-        if transaction["payment_status"] in ["paid", "completed", "failed", "expired", "cancelled"]:
-            return {
-                "payment_status": transaction["payment_status"],
-                "status": transaction["status"],
-                "plan_type": transaction["plan_type"],
-                "amount": transaction["amount"],
-                "provider": provider
-            }
-        
-        # Initialize payment manager
-        payment_manager = get_payment_manager("https://captivator.preview.emergentagent.com/")
-        
-        try:
-            provider_enum = PaymentProvider(provider)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid payment provider")
-        
-        # Check status with appropriate provider
-        payment_response = await payment_manager.get_payment_status(session_id, provider_enum)
-        
-        # Map payment statuses
-        status_map = {
-            PaymentStatus.COMPLETED: "paid",
-            PaymentStatus.PROCESSING: "processing", 
-            PaymentStatus.PENDING: "pending",
-            PaymentStatus.FAILED: "failed",
-            PaymentStatus.CANCELLED: "expired"
-        }
-        
-        mapped_status = status_map.get(payment_response.status, "pending")
-        
-        # Update transaction status
-        await db.payment_transactions.update_one(
-            {"stripe_session_id": session_id},
-            {"$set": {
-                "payment_status": mapped_status,
-                "status": "completed" if payment_response.status == PaymentStatus.COMPLETED else "processing"
-            }}
-        )
-        
-        # If payment is successful and not already processed, activate premium plan
-        if payment_response.status == PaymentStatus.COMPLETED and transaction["payment_status"] != "paid":
-            await activate_premium_plan(transaction["user_email"], transaction["plan_type"])
-        
-        return {
-            "payment_status": mapped_status,
-            "status": "completed" if payment_response.status == PaymentStatus.COMPLETED else "processing",
-            "plan_type": transaction["plan_type"],
-            "amount": transaction["amount"],
-            "provider": provider
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error checking payment status: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to check payment status: {str(e)}")
-
-async def activate_premium_plan(user_email: str, plan_type: str):
-    """Activate premium plan for user"""
-    try:
-        plan = PREMIUM_PLANS[plan_type]
-        
-        # Calculate expiration date
-        expires_at = datetime.now(timezone.utc) + timedelta(days=plan["duration_days"])
-        
-        # Deactivate any existing premium plans
-        await db.premium_plans.update_many(
-            {"user_email": user_email, "status": "active"},
-            {"$set": {"status": "inactive"}}
-        )
-        
-        # Create new premium plan
-        premium_plan = PremiumPlan(
-            user_email=user_email,
-            plan_type=plan_type,
-            amount=plan["price"],
-            currency="usd",
-            status="active",
-            expires_at=expires_at
-        )
-        
-        await db.premium_plans.insert_one(premium_plan.dict())
-        
-        logger.info(f"Activated premium plan {plan_type} for user {user_email}")
-        
-    except Exception as e:
-        logger.error(f"Error activating premium plan: {str(e)}")
-
-@api_router.post("/webhook/{provider}")
-async def handle_webhook(provider: str, request: Request):
-    """Handle webhooks from any payment provider"""
-    try:
-        # Get request body and headers
-        body = await request.body()
-        headers = dict(request.headers)
-        
-        # Initialize payment manager
-        payment_manager = get_payment_manager("https://captivator.preview.emergentagent.com/")
-        
-        try:
-            provider_enum = PaymentProvider(provider)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid payment provider")
-        
-        # Handle webhook with appropriate provider
-        webhook_data = await payment_manager.handle_webhook(provider_enum, body, headers)
-        
-        # Process webhook based on event type
-        if webhook_data.get("event_type") in ["checkout.session.completed", "CHECKOUT-ORDER-APPROVED", "payment.captured"]:
-            session_id = webhook_data.get("session_id") or webhook_data.get("order_id") or webhook_data.get("payment_id")
-            
-            if session_id:
-                # Find and update transaction
-                transaction = await db.payment_transactions.find_one({
-                    "stripe_session_id": session_id
-                })
-                
-                if transaction and transaction["payment_status"] not in ["paid", "completed"]:
-                    # Update transaction
-                    await db.payment_transactions.update_one(
-                        {"stripe_session_id": session_id},
-                        {"$set": {
-                            "payment_status": "paid",
-                            "status": "completed"
-                        }}
-                    )
-                    
-                    # Activate premium plan
-                    await activate_premium_plan(transaction["user_email"], transaction["plan_type"])
-        
-        return {"status": "success", "provider": provider}
-        
-    except Exception as e:
-        logger.error(f"Error handling {provider} webhook: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"Webhook handling failed: {str(e)}")
-
-# Legacy endpoint for backward compatibility
-@api_router.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    """Legacy Stripe webhook handler"""
-    return await handle_webhook("stripe", request)
-
-# Include the router in the main app
+# Include router and configure middleware
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
