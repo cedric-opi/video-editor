@@ -29,6 +29,16 @@ class MomoPayService:
         self.secret_key = MOMO_SECRET_KEY
         self.endpoint = MOMO_ENDPOINT
         self.query_endpoint = MOMO_QUERY_ENDPOINT
+        
+        # Demo mode for testing when credentials are not available
+        self.demo_mode = (
+            self.partner_code in ["MOMO_SANDBOX_PARTNER", "MOMO_TEST_PARTNER", None] or
+            self.access_key in ["MOMO_SANDBOX_ACCESS", "MOMO_TEST_ACCESS", None] or
+            self.secret_key in ["MOMO_SANDBOX_SECRET", "MOMO_TEST_SECRET", None]
+        )
+        
+        if self.demo_mode:
+            logger.info("🧪 MomoPay running in DEMO MODE - payments will be simulated")
     
     def generate_signature(self, data: Dict[str, Any]) -> str:
         """Generate HMAC-SHA256 signature for MomoPay requests"""
