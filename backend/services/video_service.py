@@ -41,7 +41,7 @@ class VideoService:
         """Advanced AI video analysis for viral content creation using GPT-5"""
         try:
             # Use GPT-4o enhanced analysis if available
-            if self.use_gpt5 and self.enhanced_service:
+            if self.use_enhanced and self.enhanced_service:
                 logger.info("🧠 Using GPT-4o Enhanced Video Analysis")
                 return await self.enhanced_service.analyze_video_with_gpt5(video_path, duration, user_email)
             
