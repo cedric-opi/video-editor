@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class PaymentProvider(Enum):
     STRIPE = "stripe"
     PAYPAL = "paypal"
-    RAZORPAY = "razorpay"
+    MOMOPAY = "momopay"
 
 class PaymentStatus(Enum):
     PENDING = "pending"
