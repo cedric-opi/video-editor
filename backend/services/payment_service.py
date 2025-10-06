@@ -340,6 +340,49 @@ class MomoPayService:
                 "payment_status": "error"
             }
     
+    async def _check_demo_payment_status(self, order_id: str) -> Dict[str, Any]:
+        """Check demo payment status"""
+        try:
+            # Simulate payment completion after 30 seconds
+            db = await get_database()
+            transaction = await db.payment_transactions.find_one({
+                "metadata.order_id": order_id
+            })
+            
+            if not transaction:
+                return {"success": False, "error": "Demo transaction not found", "payment_status": "error"}
+            
+            # Simulate payment completion based on time
+            created_at = transaction.get("created_at")
+            if created_at:
+                time_diff = (datetime.now(timezone.utc) - created_at).total_seconds()
+                if time_diff > 30:  # Auto-complete after 30 seconds
+                    payment_status = "completed"
+                else:
+                    payment_status = "processing"
+            else:
+                payment_status = "processing"
+            
+            logger.info(f"🧪 DEMO: Payment status for {order_id}: {payment_status}")
+            
+            return {
+                "success": True,
+                "payment_status": payment_status,
+                "result_code": 0 if payment_status == "completed" else 9000,
+                "message": "Demo payment simulation",
+                "transaction_id": f"demo_txn_{order_id[-8:]}",
+                "amount": transaction.get("amount", 0),
+                "raw_response": {
+                    "demo_mode": True,
+                    "order_id": order_id,
+                    "status": payment_status
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Demo status check error: {e}")
+            return {"success": False, "error": str(e), "payment_status": "error"}
+    
     async def handle_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle MomoPay IPN (Instant Payment Notification) webhook"""
         try:
