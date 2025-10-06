@@ -15,6 +15,7 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
 
   useEffect(() => {
     loadPremiumPlans();
+    loadPaymentProviders();
   }, []);
 
   const loadPremiumPlans = async () => {
@@ -23,6 +24,30 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
       setPlans(response.data.plans);
     } catch (error) {
       console.error('Error loading premium plans:', error);
+    }
+  };
+
+  const loadPaymentProviders = async () => {
+    try {
+      // Try to detect user region (simplified approach)
+      const userRegion = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/')[0];
+      const regionMap = {
+        'Asia': 'IN',
+        'America': 'US',
+        'Europe': 'GB'
+      };
+      
+      const response = await axios.get(`${API}/payment-providers?region=${regionMap[userRegion] || 'US'}`);
+      setPaymentProviders(response.data.available_providers);
+      setSelectedProvider(response.data.recommended);
+    } catch (error) {
+      console.error('Error loading payment providers:', error);
+      // Fallback to default providers
+      setPaymentProviders([
+        { provider: 'stripe', name: 'Credit Card (Stripe)', description: 'Pay with Visa, Mastercard, American Express' },
+        { provider: 'paypal', name: 'PayPal', description: 'Pay with PayPal account or credit card' }
+      ]);
+      setSelectedProvider('stripe');
     } finally {
       setLoading(false);
     }
