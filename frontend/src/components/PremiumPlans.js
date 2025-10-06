@@ -312,7 +312,11 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
         </div>
 
         <div className="mt-6 text-center text-gray-400 text-sm">
-          <p>Secure payment powered by Stripe • Cancel anytime • Revenue goes directly to your account</p>
+          <p>Secure payment processing • Global payment support • Cancel anytime • Revenue goes directly to your account</p>
+          <p className="mt-2 flex items-center justify-center gap-2 text-xs">
+            <Globe className="w-4 h-4" />
+            Available worldwide with multiple payment options for your region
+          </p>
         </div>
       </div>
     </div>
