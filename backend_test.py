@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import os
+import io
 from datetime import datetime
 
 class ViralVideoAnalyzerTester:
@@ -12,6 +13,7 @@ class ViralVideoAnalyzerTester:
         self.tests_run = 0
         self.tests_passed = 0
         self.test_video_id = None
+        self.gpt5_test_results = {}
 
     def run_test(self, name, method, endpoint, expected_status, data=None, files=None, timeout=30):
         """Run a single API test"""
