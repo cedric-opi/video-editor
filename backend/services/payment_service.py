@@ -54,6 +54,30 @@ class MomoPayService:
             {"code": "TPB", "name": "TPBank", "display": "Ngân hàng TMCP Tiên Phong"}
         ]
     
+    async def get_live_exchange_rate(self) -> Dict[str, float]:
+        """Get live exchange rates with fallback"""
+        try:
+            response = requests.get(
+                "https://api.exchangerate-api.com/v4/latest/USD",
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                vnd_rate = data.get("rates", {}).get("VND", USD_TO_VND_RATE)
+                usd_rate = 1.0 / vnd_rate if vnd_rate else VND_TO_USD_RATE
+                
+                logger.info(f"💱 Live rates: 1 USD = {vnd_rate:.0f} VND")
+                return {"usd_to_vnd": vnd_rate, "vnd_to_usd": usd_rate}
+        except Exception as e:
+            logger.warning(f"Exchange rate API failed: {str(e)}")
+        
+        # Fallback rates
+        return {"usd_to_vnd": USD_TO_VND_RATE, "vnd_to_usd": VND_TO_USD_RATE}
+    
+    def get_supported_atm_banks(self) -> list:
+        """Get list of supported Vietnamese banks for ATM payments"""
+        return self.atm_banks
+    
     def generate_signature(self, data: Dict[str, Any]) -> str:
         """Generate HMAC-SHA256 signature for MomoPay requests"""
         try:
