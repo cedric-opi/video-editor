@@ -1135,7 +1135,7 @@ class ViralVideoAnalyzerTester:
             return False
 
 def main():
-    print("🚀 Starting Enhanced GPT-5 Video Analysis System Tests")
+    print("🚀 Starting Comprehensive Phase 1 & 2 Testing")
     print("=" * 80)
     
     tester = ViralVideoAnalyzerTester()
@@ -1151,33 +1151,58 @@ def main():
     tester.test_openai_connection()
     tester.test_ffmpeg_availability()
     
-    # Test GPT-5 Enhanced Features (Main Focus)
-    print("\n🧠 Testing GPT-5 Enhanced Video Analysis System...")
+    # PHASE 1: Enhanced Video Analysis (GPT-4o Performance Optimization)
+    print("\n🧠 PHASE 1: Enhanced Video Analysis (GPT-4o Optimization)")
     print("=" * 80)
     
-    # 1. Test GPT-5 Configuration
+    # 1. Test GPT-4o Performance Optimization
+    tester.test_gpt4o_performance_optimization()
+    
+    # 2. Test GPT-5 Configuration (for fallback)
     tester.test_gpt5_configuration()
     
-    # 2. Test Video Upload with GPT-5 Analysis
+    # 3. Test Video Upload with Enhanced Analysis
     tester.test_video_upload_with_gpt5_analysis()
     
-    # 3. Test GPT-5 Enhanced Video Analysis Quality
+    # 4. Test Enhanced Video Analysis Quality
     tester.test_gpt5_video_analysis_quality()
     
-    # 4. Test Intelligent Video Segmentation (Max 3 segments for long videos)
+    # 5. Test Intelligent Video Segmentation (Max 3 segments for long videos)
     tester.test_intelligent_video_segmentation()
     
-    # 5. Test Premium Clip Creation with AI-Guided Editing
+    # 6. Test Premium Clip Creation with AI-Guided Editing
     tester.test_premium_clip_creation()
     
-    # 6. Test Enhanced Subtitle Generation with Emotional Cues
+    # 7. Test Enhanced Subtitle Generation with Emotional Cues
     tester.test_subtitle_enhancement()
     
-    # 7. Test Direct /api/video/analyze Endpoint
+    # 8. Test Direct /api/video/analyze Endpoint
     tester.test_direct_video_analyze_endpoint()
     
-    # 8. Test GPT-5 to GPT-4 Fallback System
+    # 9. Test GPT-5 to GPT-4 Fallback System
     tester.test_fallback_system()
+    
+    # PHASE 2: MomoPay Advanced Features
+    print("\n💳 PHASE 2: MomoPay Advanced Features")
+    print("=" * 80)
+    
+    # 1. Test Payment Providers Endpoint
+    tester.test_payment_providers_endpoint()
+    
+    # 2. Test ATM Bank List Availability
+    tester.test_atm_bank_list()
+    
+    # 3. Test Automatic Currency Conversion
+    tester.test_currency_conversion()
+    
+    # 4. Test Enhanced MomoPay Integration
+    tester.test_momopay_enhanced_integration()
+    
+    # 5. Test Webhook Security
+    tester.test_webhook_security()
+    
+    # 6. Test MOMOPAY_SETUP.md Documentation
+    tester.test_momopay_setup_documentation()
     
     # Test error handling (basic)
     print("\n🚫 Testing Basic Error Handling...")
@@ -1185,15 +1210,15 @@ def main():
     tester.test_processing_status_nonexistent()
     tester.test_video_analysis_nonexistent()
     
-    # Print comprehensive GPT-5 test results
+    # Print comprehensive test results
     gpt5_success = tester.print_gpt5_test_summary()
     
     # Print final results
     print("\n" + "=" * 80)
-    print(f"📊 Basic API Tests: {tester.tests_passed}/{tester.tests_run} tests passed")
+    print(f"📊 Total API Tests: {tester.tests_passed}/{tester.tests_run} tests passed")
     
     if gpt5_success and tester.tests_passed >= tester.tests_run * 0.8:
-        print("🎉 GPT-5 Enhanced Video Analysis System is working excellently!")
+        print("🎉 Phase 1 & 2 Implementation is working excellently!")
         return 0
     elif gpt5_success or tester.tests_passed >= tester.tests_run * 0.6:
         print("⚠️  System is mostly functional but has some issues")
