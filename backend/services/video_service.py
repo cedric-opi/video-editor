@@ -319,106 +319,101 @@ class VideoService:
     
     async def _create_standard_clips(self, video_path: str, segments: List[VideoSegment], usage_tier: str = "standard") -> List[str]:
         """Standard clip creation method"""
-        try:
-            final_clips = []
-            quality_config = QUALITY_TIERS.get(usage_tier, QUALITY_TIERS["standard"])
+        final_clips = []
+        quality_config = QUALITY_TIERS.get(usage_tier, QUALITY_TIERS["standard"])
+        
+        for segment in segments:
+            output_path = f"/tmp/segment_{segment.id}.mp4"
             
-            for segment in segments:
-                output_path = f"/tmp/segment_{segment.id}.mp4"
+            try:
+                logger.info(f"Creating professional clip: Segment {segment.segment_number} ({segment.start_time}s - {segment.end_time}s)")
                 
-                try:
-                    logger.info(f"Creating professional clip: Segment {segment.segment_number} ({segment.start_time}s - {segment.end_time}s)")
+                # Create subtitle file
+                subtitle_file = await self._create_subtitle_file(segment, usage_tier)
+                
+                # Determine video quality settings
+                if usage_tier == "premium":
+                    resolution = "1080:1920"  # Full HD vertical
+                    crf = 18  # High quality
+                    preset = "medium"
+                elif usage_tier == "free_high":
+                    resolution = "1080:1920"  # Full HD vertical  
+                    crf = 20  # Good quality
+                    preset = "medium"
+                else:
+                    resolution = "720:1280"   # HD vertical
+                    crf = 23  # Standard quality
+                    preset = "fast"
+                
+                # Build FFmpeg filter chain
+                input_video = ffmpeg.input(video_path, ss=segment.start_time, t=segment.duration)
+                
+                # Video processing pipeline
+                video = input_video.video
+                
+                # Scale and format for social media (vertical)
+                video = video.filter('scale', resolution, force_original_aspect_ratio='decrease')
+                video = video.filter('pad', resolution.replace(':', ':'), '(ow-iw)/2', '(oh-ih)/2', 'black')
+                
+                # Add professional effects for premium tiers
+                if quality_config["video_effects"]:
+                    # Add subtle color enhancement
+                    video = video.filter('eq', contrast=1.1, brightness=0.05, saturation=1.15)
                     
-                    # Create subtitle file
-                    subtitle_file = await self._create_subtitle_file(segment, usage_tier)
-                    
-                    # Determine video quality settings
+                    # Add fade effects
+                    video = video.filter('fade', type='in', duration=0.3)
+                    video = video.filter('fade', type='out', start_time=segment.duration-0.3, duration=0.3)
+                
+                # Add professional subtitles
+                if subtitle_file and os.path.exists(subtitle_file):
+                    # Advanced subtitle styling based on tier
                     if usage_tier == "premium":
-                        resolution = "1080:1920"  # Full HD vertical
-                        crf = 18  # High quality
-                        preset = "medium"
+                        subtitle_style = "FontName=Arial Black,FontSize=32,PrimaryColour=&H00FFFFFF,SecondaryColour=&H00000000,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Italic=0,Underline=0,StrikeOut=0,ScaleX=100,ScaleY=100,Spacing=0,Angle=0,BorderStyle=1,Outline=3,Shadow=2,Alignment=2,MarginL=10,MarginR=10,MarginV=20"
                     elif usage_tier == "free_high":
-                        resolution = "1080:1920"  # Full HD vertical  
-                        crf = 20  # Good quality
-                        preset = "medium"
+                        subtitle_style = "FontName=Arial,FontSize=28,PrimaryColour=&H00FFFFFF,SecondaryColour=&H00000000,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=2,Shadow=2,Alignment=2,MarginV=30"
                     else:
-                        resolution = "720:1280"   # HD vertical
-                        crf = 23  # Standard quality
-                        preset = "fast"
+                        subtitle_style = "FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,Bold=1,Outline=1,Alignment=2,MarginV=40"
                     
-                    # Build FFmpeg filter chain
-                    input_video = ffmpeg.input(video_path, ss=segment.start_time, t=segment.duration)
-                    
-                    # Video processing pipeline
-                    video = input_video.video
-                    
-                    # Scale and format for social media (vertical)
-                    video = video.filter('scale', resolution, force_original_aspect_ratio='decrease')
-                    video = video.filter('pad', resolution.replace(':', ':'), '(ow-iw)/2', '(oh-ih)/2', 'black')
-                    
-                    # Add professional effects for premium tiers
-                    if quality_config["video_effects"]:
-                        # Add subtle color enhancement
-                        video = video.filter('eq', contrast=1.1, brightness=0.05, saturation=1.15)
-                        
-                        # Add fade effects
-                        video = video.filter('fade', type='in', duration=0.3)
-                        video = video.filter('fade', type='out', start_time=segment.duration-0.3, duration=0.3)
-                    
-                    # Add professional subtitles
-                    if subtitle_file and os.path.exists(subtitle_file):
-                        # Advanced subtitle styling based on tier
-                        if usage_tier == "premium":
-                            subtitle_style = "FontName=Arial Black,FontSize=32,PrimaryColour=&H00FFFFFF,SecondaryColour=&H00000000,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Italic=0,Underline=0,StrikeOut=0,ScaleX=100,ScaleY=100,Spacing=0,Angle=0,BorderStyle=1,Outline=3,Shadow=2,Alignment=2,MarginL=10,MarginR=10,MarginV=20"
-                        elif usage_tier == "free_high":
-                            subtitle_style = "FontName=Arial,FontSize=28,PrimaryColour=&H00FFFFFF,SecondaryColour=&H00000000,OutlineColour=&H00000000,BackColour=&H80000000,Bold=1,Outline=2,Shadow=2,Alignment=2,MarginV=30"
-                        else:
-                            subtitle_style = "FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,Bold=1,Outline=1,Alignment=2,MarginV=40"
-                        
-                        video = video.filter('subtitles', subtitle_file, force_style=subtitle_style)
-                    
-                    # Audio processing
-                    audio = input_video.audio
-                    if quality_config["video_effects"]:
-                        # Audio enhancement for premium
-                        audio = audio.filter('volume', '1.1')  # Slight volume boost
-                        audio = audio.filter('highpass', f=80)  # Remove low-frequency noise
-                    
-                    # Output final video
-                    output = ffmpeg.output(
-                        video, audio, output_path,
-                        vcodec='libx264',
-                        acodec='aac',
-                        crf=crf,
-                        preset=preset,
-                        movflags='faststart',  # Optimize for web playback
-                        pix_fmt='yuv420p'     # Ensure compatibility
-                    )
-                    
-                    # Run FFmpeg
-                    ffmpeg.run(output, overwrite_output=True, quiet=True)
-                    
-                    # Verify output
-                    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                        final_clips.append(output_path)
-                        logger.info(f"✅ Created professional clip: {output_path} ({usage_tier} quality)")
-                    else:
-                        logger.error(f"❌ Failed to create clip: {output_path}")
-                    
-                    # Cleanup subtitle file
-                    if subtitle_file and os.path.exists(subtitle_file):
-                        os.remove(subtitle_file)
+                    video = video.filter('subtitles', subtitle_file, force_style=subtitle_style)
                 
-                except Exception as e:
-                    logger.error(f"Error creating clip for segment {segment.id}: {str(e)}")
-                    continue
+                # Audio processing
+                audio = input_video.audio
+                if quality_config["video_effects"]:
+                    # Audio enhancement for premium
+                    audio = audio.filter('volume', '1.1')  # Slight volume boost
+                    audio = audio.filter('highpass', f=80)  # Remove low-frequency noise
+                
+                # Output final video
+                output = ffmpeg.output(
+                    video, audio, output_path,
+                    vcodec='libx264',
+                    acodec='aac',
+                    crf=crf,
+                    preset=preset,
+                    movflags='faststart',  # Optimize for web playback
+                    pix_fmt='yuv420p'     # Ensure compatibility
+                )
+                
+                # Run FFmpeg
+                ffmpeg.run(output, overwrite_output=True, quiet=True)
+                
+                # Verify output
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    final_clips.append(output_path)
+                    logger.info(f"✅ Created professional clip: {output_path} ({usage_tier} quality)")
+                else:
+                    logger.error(f"❌ Failed to create clip: {output_path}")
+                
+                # Cleanup subtitle file
+                if subtitle_file and os.path.exists(subtitle_file):
+                    os.remove(subtitle_file)
             
-            logger.info(f"🎬 Created {len(final_clips)} professional clips ({usage_tier} tier)")
-            return final_clips
-            
-        except Exception as e:
-            logger.error(f"Error in professional clip creation: {str(e)}")
-            return []
+            except Exception as e:
+                logger.error(f"Error creating clip for segment {segment.id}: {str(e)}")
+                continue
+        
+        logger.info(f"🎬 Created {len(final_clips)} professional clips ({usage_tier} tier)")
+        return final_clips
     
     async def _create_subtitle_file(self, segment: VideoSegment, usage_tier: str) -> str:
         """Create professional SRT subtitle file"""
