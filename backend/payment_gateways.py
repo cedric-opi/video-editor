@@ -405,10 +405,11 @@ class MomoPayAdapter(PaymentAdapter):
     
     async def create_checkout_session(self, request: PaymentRequest) -> PaymentResponse:
         try:
-            # Convert USD to VND (Vietnamese Dong) - approximate rate 1 USD = 24,000 VND
-            amount_vnd = int(request.amount * 24000)
+            # Get live exchange rate for accurate conversion
+            exchange_rate = await self.get_live_exchange_rate()
+            amount_vnd = int(request.amount * exchange_rate)
             request_id = str(uuid.uuid4())
-            order_id = f"ORDER_{request.plan_type}_{int(time.time())}"
+            order_id = f"MOMO_{request.plan_type}_{int(time.time())}"
             
             # MomoPay request data
             request_data = {
