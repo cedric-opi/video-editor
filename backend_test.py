@@ -778,7 +778,10 @@ def main():
     # 6. Test Enhanced Subtitle Generation with Emotional Cues
     tester.test_subtitle_enhancement()
     
-    # 7. Test GPT-5 to GPT-4 Fallback System
+    # 7. Test Direct /api/video/analyze Endpoint
+    tester.test_direct_video_analyze_endpoint()
+    
+    # 8. Test GPT-5 to GPT-4 Fallback System
     tester.test_fallback_system()
     
     # Test error handling (basic)
