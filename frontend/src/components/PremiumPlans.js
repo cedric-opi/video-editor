@@ -59,6 +59,11 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
       return;
     }
 
+    if (!selectedProvider) {
+      alert('Please select a payment method');
+      return;
+    }
+
     setProcessingPayment(true);
     setSelectedPlan(planType);
 
@@ -68,17 +73,33 @@ const PremiumPlans = ({ userEmail, onClose, onSuccess }) => {
       const response = await axios.post(`${API}/create-checkout`, {
         plan_type: planType,
         user_email: userEmail,
-        origin_url: originUrl
+        origin_url: originUrl,
+        payment_provider: selectedProvider
       });
 
-      // Redirect to Stripe Checkout
-      window.location.href = response.data.checkout_url;
+      // Handle different payment providers
+      if (response.data.checkout_url) {
+        // For Stripe/PayPal - redirect to checkout
+        window.location.href = response.data.checkout_url;
+      } else if (response.data.provider === 'razorpay') {
+        // For Razorpay - initialize Razorpay checkout
+        handleRazorpayCheckout(response.data.order_details, planType);
+      } else {
+        throw new Error('Unknown payment provider response');
+      }
 
     } catch (error) {
       console.error('Payment error:', error);
       alert(error.response?.data?.detail || 'Failed to create checkout session');
       setProcessingPayment(false);
     }
+  };
+
+  const handleRazorpayCheckout = (orderDetails, planType) => {
+    // This would be implemented if Razorpay is needed
+    // For now, fallback to other providers
+    alert('Razorpay checkout not implemented yet. Please use Credit Card or PayPal.');
+    setProcessingPayment(false);
   };
 
   if (loading) {
