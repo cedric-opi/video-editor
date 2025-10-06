@@ -169,6 +169,8 @@ class CheckoutRequest(BaseModel):
     plan_type: str
     user_email: str
     origin_url: str
+    payment_provider: Optional[str] = None  # stripe, paypal, razorpay
+    user_region: Optional[str] = None  # US, IN, GB, etc.
 
 # Helper Functions
 async def analyze_video_content(video_path: str, duration: float) -> Dict[str, Any]:
