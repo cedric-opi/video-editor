@@ -94,6 +94,35 @@ class ProcessingStatus(BaseModel):
     message: str
     error: Optional[str] = None
 
+# Payment Models
+class PremiumPlan(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_email: str
+    plan_type: str  # "premium_monthly", "premium_yearly"
+    amount: float
+    currency: str = "usd"
+    status: str = "pending"
+    stripe_session_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: Optional[datetime] = None
+
+class PaymentTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_email: str
+    amount: float
+    currency: str = "usd"
+    plan_type: str
+    stripe_session_id: str
+    payment_status: str = "pending"
+    status: str = "initiated"
+    metadata: Dict[str, Any] = {}
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CheckoutRequest(BaseModel):
+    plan_type: str
+    user_email: str
+    origin_url: str
+
 # Helper Functions
 async def analyze_video_content(video_path: str, duration: float) -> Dict[str, Any]:
     """Analyze video content using OpenAI GPT-4"""
