@@ -19,6 +19,9 @@ const ViralVideoAnalyzer = () => {
   const [segments, setSegments] = useState([]);
   const [processingStatus, setProcessingStatus] = useState({});
   const [uploading, setUploading] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [premiumStatus, setPremiumStatus] = useState({ is_premium: false, max_video_duration: 300 });
 
   // Load videos on component mount
   useEffect(() => {
