@@ -38,103 +38,118 @@ class VideoService:
             self.use_gpt5 = False
     
     async def analyze_video_content(self, video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
-        """Advanced AI video analysis for viral content creation"""
+        """Advanced AI video analysis for viral content creation using GPT-5"""
         try:
-            # Get user's quality tier
-            usage_tier = await UserService.check_user_usage_limits(user_email)
-            quality_config = QUALITY_TIERS.get(usage_tier, QUALITY_TIERS["standard"])
+            # Use GPT-5 enhanced analysis if available
+            if self.use_gpt5 and self.enhanced_service:
+                logger.info("🧠 Using GPT-5 Enhanced Video Analysis")
+                return await self.enhanced_service.analyze_video_with_gpt5(video_path, duration, user_email)
             
-            # Determine segment strategy for long videos
-            max_segments = MAX_SEGMENTS_LONG_VIDEO if duration > 180 else 5  # 3 segments max for videos > 3 minutes
+            # Fallback to GPT-4 analysis
+            logger.info("⚡ Using GPT-4 Fallback Analysis")
+            return await self._analyze_with_gpt4_fallback(video_path, duration, user_email)
             
-            # Enhanced AI analysis prompt for viral video editing
-            analysis_prompt = f"""
-            You are a WORLD-CLASS VIRAL VIDEO EDITOR. Analyze this {duration:.1f}-second video to create the MOST ENGAGING content possible.
-
-            VIDEO ANALYSIS REQUIREMENTS:
-            1. **VIRAL POTENTIAL SCORING** (0.0-1.0 scale)
-            2. **STRATEGIC SEGMENTATION** - Create exactly {max_segments} segments maximum
-            3. **PROFESSIONAL SUBTITLES** - Generate embedded subtitle content for each segment
-            4. **ENGAGEMENT OPTIMIZATION** - Hook viewers and maintain attention
-
-            SEGMENTATION RULES:
-            - For videos > 3 minutes: Create exactly 3 high-impact segments (20-60 seconds each)
-            - For shorter videos: Create 3-5 segments (10-30 seconds each)
-            - Each segment must be self-contained and viral-ready
-            - Prioritize the most engaging moments with highest viral potential
-
-            SUBTITLE REQUIREMENTS:
-            - Generate accurate, engaging subtitles that appear IN the video
-            - Use dynamic text that enhances the content (not just transcription)
-            - Include emotional cues: [Exciting], [Surprising], [Important]
-            - Make subtitles that work even with sound OFF
-            - Time subtitles perfectly to match speech/action
-
-            Quality Level: {usage_tier.upper()}
-            Max Analysis Tokens: {quality_config["ai_analysis_tokens"]}
-
-            Respond in this EXACT JSON format:
-            {{
-                "viral_score": 0.85,
-                "content_type": "tutorial/entertainment/educational/promotional",
-                "target_audience": "specific audience description",
-                "viral_techniques": ["hook strategy", "emotional triggers", "visual elements"],
-                "engagement_factors": ["curiosity gaps", "value delivery", "entertainment"],
-                "content_summary": "compelling one-line description",
-                "analysis_text": "detailed viral potential analysis",
-                "optimized_segments": [
-                    {{
-                        "segment_id": 1,
-                        "start": 0,
-                        "end": 25,
-                        "duration": 25,
-                        "purpose": "Hook - Grab attention instantly",
-                        "viral_score": 0.9,
-                        "caption_text": "🔥 This changes everything you know about...",
-                        "description": "Opening hook with immediate value",
-                        "subtitle_content": "00:00:00,000 --> 00:00:03,000\\nWatch this incredible transformation!\\n\\n00:00:03,000 --> 00:00:06,000\\n[Exciting] This will blow your mind...",
-                        "editing_notes": "Add zoom effect, highlight key moments",
-                        "engagement_elements": ["curiosity gap", "visual impact"]
-                    }}
-                ],
-                "editing_recommendations": ["Add dynamic text", "Use quick cuts"],
-                "subtitle_strategy": "Use emotional cues and perfect timing"
-            }}
-            """
-            
-            # Use appropriate model and token limit based on quality tier
-            model = "gpt-4" if usage_tier in ["premium", "free_high"] else "gpt-4"
-            max_tokens = quality_config["ai_analysis_tokens"]
-            
-            response = await self.openai_client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are the world's best viral video editor with expertise in TikTok, Instagram Reels, and YouTube Shorts. You understand psychology, viral mechanics, and what makes content shareable. You create videos that consistently get millions of views."
-                    },
-                    {"role": "user", "content": analysis_prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=0.7
-            )
-            
-            # Parse AI response
-            try:
-                analysis_json = json.loads(response.choices[0].message.content.strip())
-                
-                # Ensure compatibility with existing code
-                if "optimized_segments" in analysis_json:
-                    analysis_json["highlight_segments"] = analysis_json["optimized_segments"]
-                
-                return analysis_json
-                
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse AI response, creating enhanced default analysis")
-                return self._create_default_analysis(duration, usage_tier, max_segments)
-        
         except Exception as e:
-            logger.error(f"Error in advanced video analysis: {str(e)}")
+            logger.error(f"Error in video analysis: {str(e)}")
+            usage_tier = await UserService.check_user_usage_limits(user_email)
+            max_segments = MAX_SEGMENTS_LONG_VIDEO if duration > 180 else 5
+            return self._create_default_analysis(duration, usage_tier, max_segments)
+    
+    async def _analyze_with_gpt4_fallback(self, video_path: str, duration: float, user_email: str = None) -> Dict[str, Any]:
+        """Fallback GPT-4 analysis when GPT-5 is unavailable"""
+        # Get user's quality tier
+        usage_tier = await UserService.check_user_usage_limits(user_email)
+        quality_config = QUALITY_TIERS.get(usage_tier, QUALITY_TIERS["standard"])
+        
+        # Determine segment strategy for long videos
+        max_segments = MAX_SEGMENTS_LONG_VIDEO if duration > 180 else 5  # 3 segments max for videos > 3 minutes
+        
+        # Enhanced AI analysis prompt for viral video editing
+        analysis_prompt = f"""
+        You are a WORLD-CLASS VIRAL VIDEO EDITOR. Analyze this {duration:.1f}-second video to create the MOST ENGAGING content possible.
+
+        VIDEO ANALYSIS REQUIREMENTS:
+        1. **VIRAL POTENTIAL SCORING** (0.0-1.0 scale)
+        2. **STRATEGIC SEGMENTATION** - Create exactly {max_segments} segments maximum
+        3. **PROFESSIONAL SUBTITLES** - Generate embedded subtitle content for each segment
+        4. **ENGAGEMENT OPTIMIZATION** - Hook viewers and maintain attention
+
+        SEGMENTATION RULES:
+        - For videos > 3 minutes: Create exactly 3 high-impact segments (20-60 seconds each)
+        - For shorter videos: Create 3-5 segments (10-30 seconds each)
+        - Each segment must be self-contained and viral-ready
+        - Prioritize the most engaging moments with highest viral potential
+
+        SUBTITLE REQUIREMENTS:
+        - Generate accurate, engaging subtitles that appear IN the video
+        - Use dynamic text that enhances the content (not just transcription)
+        - Include emotional cues: [Exciting], [Surprising], [Important]
+        - Make subtitles that work even with sound OFF
+        - Time subtitles perfectly to match speech/action
+
+        Quality Level: {usage_tier.upper()}
+        Max Analysis Tokens: {quality_config["ai_analysis_tokens"]}
+
+        Respond in this EXACT JSON format:
+        {{
+            "viral_score": 0.85,
+            "content_type": "tutorial/entertainment/educational/promotional",
+            "target_audience": "specific audience description",
+            "viral_techniques": ["hook strategy", "emotional triggers", "visual elements"],
+            "engagement_factors": ["curiosity gaps", "value delivery", "entertainment"],
+            "content_summary": "compelling one-line description",
+            "analysis_text": "detailed viral potential analysis",
+            "optimized_segments": [
+                {{
+                    "segment_id": 1,
+                    "start": 0,
+                    "end": 25,
+                    "duration": 25,
+                    "purpose": "Hook - Grab attention instantly",
+                    "viral_score": 0.9,
+                    "caption_text": "🔥 This changes everything you know about...",
+                    "description": "Opening hook with immediate value",
+                    "subtitle_content": "00:00:00,000 --> 00:00:03,000\\nWatch this incredible transformation!\\n\\n00:00:03,000 --> 00:00:06,000\\n[Exciting] This will blow your mind...",
+                    "editing_notes": "Add zoom effect, highlight key moments",
+                    "engagement_elements": ["curiosity gap", "visual impact"]
+                }}
+            ],
+            "editing_recommendations": ["Add dynamic text", "Use quick cuts"],
+            "subtitle_strategy": "Use emotional cues and perfect timing"
+        }}
+        """
+        
+        # Use appropriate model and token limit based on quality tier
+        model = "gpt-4" if usage_tier in ["premium", "free_high"] else "gpt-4"
+        max_tokens = quality_config["ai_analysis_tokens"]
+        
+        response = await self.openai_client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "You are the world's best viral video editor with expertise in TikTok, Instagram Reels, and YouTube Shorts. You understand psychology, viral mechanics, and what makes content shareable. You create videos that consistently get millions of views."
+                },
+                {"role": "user", "content": analysis_prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=0.7
+        )
+        
+        # Parse AI response
+        try:
+            analysis_json = json.loads(response.choices[0].message.content.strip())
+            
+            # Ensure compatibility with existing code
+            if "optimized_segments" in analysis_json:
+                analysis_json["highlight_segments"] = analysis_json["optimized_segments"]
+            
+            # Mark as GPT-4 analysis
+            analysis_json["analysis_model"] = "gpt-4-fallback"
+            return analysis_json
+            
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse GPT-4 response, creating enhanced default analysis")
             return self._create_default_analysis(duration, usage_tier, max_segments)
     
     def _create_default_analysis(self, duration: float, usage_tier: str, max_segments: int) -> Dict[str, Any]:
