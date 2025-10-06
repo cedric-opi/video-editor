@@ -13,7 +13,9 @@ from enum import Enum
 
 # Payment gateway imports
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest, CheckoutSessionResponse
-import razorpay
+import requests
+import hmac
+import hashlib
 from paypalcheckoutsdk.core import SandboxEnvironment, LiveEnvironment, PayPalHttpClient
 from paypalcheckoutsdk.orders import OrdersCreateRequest, OrdersCaptureRequest
 
