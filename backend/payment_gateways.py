@@ -464,7 +464,7 @@ class PaymentGatewayManager:
         self.adapters = {
             PaymentProvider.STRIPE: StripeAdapter(host_url),
             PaymentProvider.PAYPAL: PayPalAdapter(host_url),
-            PaymentProvider.RAZORPAY: RazorpayAdapter(host_url)
+            PaymentProvider.MOMOPAY: MomoPayAdapter(host_url)
         }
         
         # Regional preferences for payment providers
