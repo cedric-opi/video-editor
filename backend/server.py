@@ -919,7 +919,7 @@ async def check_premium_status(request: Dict[str, str]):
 
 @api_router.post("/create-checkout")
 async def create_checkout_session(request: CheckoutRequest):
-    """Create Stripe checkout session for premium plan"""
+    """Create checkout session for premium plan using multi-gateway system"""
     try:
         # Validate plan type
         if request.plan_type not in PREMIUM_PLANS:
@@ -929,27 +929,45 @@ async def create_checkout_session(request: CheckoutRequest):
         plan = PREMIUM_PLANS[request.plan_type]
         amount = plan["price"]
         
-        # Initialize Stripe client
-        stripe_client = get_stripe_client(request.origin_url)
+        # Initialize payment manager
+        payment_manager = get_payment_manager(request.origin_url)
+        
+        # Determine payment provider
+        provider = None
+        if request.payment_provider:
+            try:
+                provider = PaymentProvider(request.payment_provider)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid payment provider")
         
         # Create success and cancel URLs
-        success_url = f"{request.origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
+        success_url = f"{request.origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&provider={{PROVIDER}}"
         cancel_url = f"{request.origin_url}/payment-cancel"
         
-        # Create checkout session
-        checkout_request = CheckoutSessionRequest(
+        # Create payment request
+        payment_request = PaymentRequest(
             amount=amount,
             currency="usd",
+            user_email=request.user_email,
+            plan_type=request.plan_type,
             success_url=success_url,
             cancel_url=cancel_url,
             metadata={
-                "user_email": request.user_email,
-                "plan_type": request.plan_type,
+                "plan_name": plan["name"],
+                "plan_description": plan["description"],
                 "source": "viral_video_analyzer"
             }
         )
         
-        session: CheckoutSessionResponse = await stripe_client.create_checkout_session(checkout_request)
+        # Create checkout session
+        payment_response = await payment_manager.create_payment(
+            payment_request, 
+            provider=provider,
+            region=request.user_region
+        )
+        
+        if payment_response.status == PaymentStatus.FAILED:
+            raise HTTPException(status_code=500, detail=f"Payment creation failed: {payment_response.error}")
         
         # Save payment transaction
         transaction = PaymentTransaction(
@@ -957,24 +975,39 @@ async def create_checkout_session(request: CheckoutRequest):
             amount=amount,
             currency="usd",
             plan_type=request.plan_type,
-            stripe_session_id=session.session_id,
+            stripe_session_id=payment_response.session_id or payment_response.order_id,
             payment_status="pending",
             status="initiated",
             metadata={
                 "plan_name": plan["name"],
-                "plan_description": plan["description"]
+                "plan_description": plan["description"],
+                "payment_provider": payment_response.provider.value,
+                "raw_response": payment_response.raw_response
             }
         )
         
         await db.payment_transactions.insert_one(transaction.dict())
         
-        logger.info(f"Created checkout session for user {request.user_email}, plan {request.plan_type}")
+        logger.info(f"Created {payment_response.provider.value} checkout for user {request.user_email}, plan {request.plan_type}")
         
-        return {
-            "checkout_url": session.url,
-            "session_id": session.session_id
+        response_data = {
+            "provider": payment_response.provider.value,
+            "session_id": payment_response.session_id,
+            "order_id": payment_response.order_id,
+            "status": payment_response.status.value
         }
         
+        # Add checkout URL for Stripe/PayPal, or order details for Razorpay
+        if payment_response.checkout_url:
+            response_data["checkout_url"] = payment_response.checkout_url
+        else:
+            # For Razorpay, return order details for frontend handling
+            response_data["order_details"] = payment_response.raw_response
+        
+        return response_data
+        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating checkout session: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
