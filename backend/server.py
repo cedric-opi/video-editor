@@ -90,9 +90,6 @@ class ProcessingStatus(BaseModel):
 async def analyze_video_content(video_path: str, duration: float) -> Dict[str, Any]:
     """Analyze video content using OpenAI GPT-4"""
     try:
-        # Extract frames for analysis (every 10 seconds)
-        video = VideoFileClip(video_path)
-        
         # Get video transcript/description based on visual analysis
         analysis_prompt = f"""
         Analyze this video content for viral potential and techniques. The video is {duration:.1f} seconds long.
@@ -127,9 +124,13 @@ async def analyze_video_content(video_path: str, duration: float) -> Dict[str, A
         )
         
         # Parse the JSON response
-        analysis_json = json.loads(response.choices[0].message.content.strip())
+        try:
+            analysis_json = json.loads(response.choices[0].message.content.strip())
+        except json.JSONDecodeError:
+            # If JSON parsing fails, create default response
+            logger.warning("Failed to parse AI response as JSON, using default analysis")
+            raise ValueError("JSON parsing failed")
         
-        video.close()
         return analysis_json
         
     except Exception as e:
